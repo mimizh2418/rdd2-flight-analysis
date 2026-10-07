@@ -47,6 +47,9 @@ python3 tools/export_rdd2_viewer.py \
 Import the resulting `trace.csv` and `manifest.json`. Use `--modelica-root` for a different checkout location;
 see `python3 tools/export_rdd2_viewer.py --help` for bundling existing CSVs or attaching mission geometry.
 
+The exporter reports stages, elapsed time, and CSV progress on stderr; `--quiet` suppresses these messages.
+The manifest records separate model-loading, simulation, and export timings. Stdout contains the final bundle path.
+
 For batch simulations from the app, run `npm run service` and connect **Simulation** to `http://127.0.0.1:8765`.
 
 ## Build and test
