@@ -147,7 +147,7 @@ export function WorkspaceScene({
     scene.add(light);
 
     const bounds = new THREE.Box3();
-    const lines: { line: LineSegments2; binding: Binding; times: Float64Array; run: Run }[] = [];
+    const lines: { line: LineSegments2; binding: Binding; times: Float64Array; segments: number; run: Run }[] = [];
     const poses: { root: THREE.Group; binding: Binding; field: Field; run: Run; axes: THREE.AxesHelper }[] = [];
     const overlays: { binding: Binding; field: Field; run: Run; arrows: THREE.ArrowHelper[] }[] = [];
     const lineMaterials: LineMaterial[] = [];
@@ -168,7 +168,8 @@ export function WorkspaceScene({
 
       if (!vehicle && layers.trajectory && path?.positions.length) {
         const geometry = new LineSegmentsGeometry();
-        geometry.setPositions(path.positions);
+        const positions = binding.fullPath ? (path.fullPositions ?? path.positions) : path.positions;
+        geometry.setPositions(positions);
         const material = new LineMaterial({
           color: binding.color,
           linewidth: binding.width,
@@ -181,7 +182,7 @@ export function WorkspaceScene({
         line.computeLineDistances();
         line.frustumCulled = false;
         scene.add(line);
-        lines.push({ line, binding, times: path.times, run });
+        lines.push({ line, binding, times: path.times, segments: positions.length / 6, run });
         lineMaterials.push(material);
         if (field.type === 'plan' && binding.markers) {
           const points = run.manifest?.mission?.waypoints ?? [];
@@ -427,7 +428,7 @@ export function WorkspaceScene({
             (sourceTime >= item.run.time[item.run.index[0]] &&
               sourceTime <= item.run.time[item.run.index[item.run.index.length - 1]]));
         item.line.geometry.instanceCount = item.binding.fullPath
-          ? item.times.length
+          ? item.segments
           : upperBound(item.times, time + offset);
       }
       for (const item of overlays) {

@@ -106,6 +106,8 @@ export interface LoadingState {
 /** GPU-ready path coordinates and segment end times, computed in a worker and transferable to the UI. */
 export interface PreparedPath {
   positions: Float32Array;
+  /** Render-only compact geometry for the full-path view; timed trails retain positions and times. */
+  fullPositions?: Float32Array;
   times: Float64Array;
   bounds: { min: Vec3; max: Vec3 };
 }

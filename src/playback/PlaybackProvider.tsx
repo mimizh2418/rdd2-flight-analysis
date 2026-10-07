@@ -278,8 +278,10 @@ export function PlaybackProvider({
      */
     const tick = (now: number) => {
       const state = live.current;
-      let next = state.time + ((now - previous) / 1000) * state.speed;
-      previous = now;
+      // The first RAF timestamp can precede effect setup within the same browser frame. Never rewind playback.
+      const elapsed = Math.max(0, now - previous);
+      let next = state.time + (elapsed / 1000) * state.speed;
+      previous = Math.max(previous, now);
 
       if (next > state.domain[1]) {
         if (state.loop) next = state.domain[0] + ((next - state.domain[0]) % (state.domain[1] - state.domain[0]));

@@ -79,7 +79,10 @@ context.onmessage = async (event: MessageEvent) => {
     if (message.type === 'field') {
       const prepared = await prepareField(runs.get(message.runId)!, message.field as Field, report, isCancelled);
       result = prepared;
-      if (prepared.path) transfer.push(prepared.path.positions.buffer, prepared.path.times.buffer);
+      if (prepared.path) {
+        transfer.push(prepared.path.positions.buffer, prepared.path.times.buffer);
+        if (prepared.path.fullPositions) transfer.push(prepared.path.fullPositions.buffer);
+      }
     } else if (message.type === 'graph-index') {
       const index = await buildGraphIndex(runs.get(message.runId)!, message.signalId, report, isCancelled);
       result = index;

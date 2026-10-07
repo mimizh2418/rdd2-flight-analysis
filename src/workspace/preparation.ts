@@ -2,6 +2,7 @@ import type { Run, Vec3 } from '../data/types';
 import { sample } from '../playback/time';
 import { decimate, summarize } from '../math/statistics';
 import type { Field, PlotSeries, PreparedField, PreparedPlot } from './types';
+import { simplifyFullPath } from './pathGeometry';
 
 export type Progress = (fraction: number, stage: string) => void;
 export type Cancelled = () => boolean;
@@ -90,7 +91,12 @@ export async function prepareField(
         max[axis] = Math.max(max[axis], point[axis]);
       }
 
-      if (previous) {
+      // Held messages and stationary samples often repeat a position for thousands of solver rows.
+      // Thick-line shaders normalize segment direction: identical GPU endpoints contribute no visible path
+      // and waste work (or produce an undefined direction). Compare at the Float32 precision used by geometry.
+      const hasLength = previous && point.some((value, axis) => Math.fround(value) !== Math.fround(previous![axis]));
+
+      if (previous && hasLength) {
         positions.push(...previous, ...point);
         times.push(time);
       }
@@ -102,13 +108,24 @@ export async function prepareField(
     previousSequence = sequence;
 
     if (index % 4096 === 0) {
-      report(index / Math.max(1, rows), 'Building path');
+      report((index / Math.max(1, rows)) * 0.7, 'Building path');
       await checkpoint(cancelled);
     }
   }
 
+  const coordinates = Float32Array.from(positions);
+  const fullPositions = planned
+    ? undefined
+    : await simplifyFullPath(
+        coordinates,
+        () => checkpoint(cancelled),
+        (fraction) => report(0.7 + fraction * 0.3, 'Reducing drawing geometry'),
+      );
+
   report(1, 'Ready');
-  return { path: { positions: Float32Array.from(positions), times: Float64Array.from(times), bounds: { min, max } } };
+  return {
+    path: { positions: coordinates, fullPositions, times: Float64Array.from(times), bounds: { min, max } },
+  };
 }
 
 /**
