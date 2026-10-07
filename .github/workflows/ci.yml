@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+
+jobs:
+  checks:
+    name: Formatting and unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Python formatter
+        run: python3 -m pip install black==25.9.0
+
+      - name: Check frontend and repository formatting
+        run: npm run format:check
+
+      - name: Check Python formatting
+        run: python3 -m black --check tools tests
+
+      - name: Run core tests
+        run: npm test
+
+      - name: Run Python tests
+        run: npm run test:python
+
+  browser:
+    name: Production build and browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RDD2_PREVIEW: '1'
+      PLAYWRIGHT_HTML_OPEN: never
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Type-check and build
+        run: npm run build
+
+      # Playwright keeps one worker for rendering/timing assertions and starts its own production preview server.
+      # Simulation-artifact tests skip until RDD2_GPS_TRACE and RDD2_RUMOCA_BUNDLE fixtures are supplied.
+      - name: Run browser tests
+        id: tests
+        run: npm run test:browser -- --forbid-only --trace=retain-on-failure --reporter=line,html
+
+      - name: Upload browser reports, traces, and screenshots
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-test-results
+          path: |
+            playwright-report/
+            test-results/
+            artifacts/validation/
+          if-no-files-found: warn
+          retention-days: 14

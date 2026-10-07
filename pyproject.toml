@@ -1,0 +1,5 @@
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+required-version = "25.9.0"
+include = '\.py$'
