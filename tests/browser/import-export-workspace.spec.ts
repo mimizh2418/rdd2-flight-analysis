@@ -109,6 +109,7 @@ test('workspace restoration reattaches content hashes and keeps per-tab styles',
   await page.getByLabel('Line style Truth vehicle pose').selectOption('dotted');
   await page.getByRole('button', { name: 'Top', exact: true }).click();
   await seekTime(page, 1);
+  await zoomIn(page);
   await page.waitForTimeout(400);
   await page.reload();
 
@@ -133,6 +134,8 @@ test('workspace restoration reattaches content hashes and keeps per-tab styles',
 
   await expect(page.getByLabel('Line style Truth vehicle pose')).toHaveValue('dotted');
   await expect(page.getByTestId('playback-time')).toContainText('1.000');
+  await expect(page.getByRole('slider', { name: 'Timeline' })).toHaveAttribute('aria-valuemin', '0');
+  await expect(page.getByRole('slider', { name: 'Timeline' })).toHaveAttribute('aria-valuemax', '2');
 
   await expect
     .poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem('rdd2.workspace.v1')!).tabs[0].camera))

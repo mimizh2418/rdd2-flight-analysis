@@ -7,14 +7,24 @@ import { DroneGlyph } from './DroneIcon';
 
 /**
  * Preview a field's actual line style, color, model, and combined spatial representation.
- * @param props Field settings, optional attached metadata, and the active visualization type.
+ * @param props Field settings, optional metadata, active view, and an optional model-only preview.
  * @returns Decorative SVG for the appearance button; its accessible name belongs to the enclosing button.
  */
-export function AppearanceIcon({ binding, field, tab }: { binding: Binding; field?: Field; tab: ViewTab }) {
+export function AppearanceIcon({
+  binding,
+  field,
+  tab,
+  poseOnly = false,
+}: {
+  binding: Binding;
+  field?: Field;
+  tab: ViewTab;
+  poseOnly?: boolean;
+}) {
   const spatial = tab.type === 'trajectory';
   const layers = field ? spatialLayers(binding, field) : { trajectory: true, pose: false };
-  const line = tab.type === 'graph' || (spatial && layers.trajectory);
-  const model = binding.lane === 'vehicle' || (spatial && layers.pose);
+  const line = !poseOnly && (tab.type === 'graph' || (spatial && layers.trajectory));
+  const model = poseOnly || binding.lane === 'vehicle' || (spatial && layers.pose);
   const combined = line && model;
   const center = combined ? 9 : 13;
   const dash = binding.style === 'dashed' ? '6 4' : binding.style === 'dotted' ? '1 4' : undefined;

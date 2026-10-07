@@ -354,6 +354,7 @@ export function Workbench({
       binding.id = identities.get(binding.id)!;
       if (binding.attachTo) binding.attachTo = identities.get(binding.attachTo);
     });
+    if (copy.followPose) copy.followPose = identities.get(copy.followPose);
     setTabs((current) => [...current, copy]);
     setActive(copy.id);
   };
@@ -807,6 +808,7 @@ export function Workbench({
                 runs={runs}
                 prepared={prepared}
                 onCameraMode={(camera) => patchTab({ camera })}
+                onFollowPose={(followPose) => patchTab({ camera: 'follow', followPose })}
               />
             ) : (
               <div className="empty-view">Create a visualization from ＋ New.</div>
@@ -828,7 +830,15 @@ export function Workbench({
               dragged={dragged}
               onAdd={addField}
               onPatch={patchBinding}
-              onRemove={(id) => patchTab({ bindings: tab.bindings.filter((binding) => binding.id !== id) })}
+              onRemove={(id) =>
+                patchTab({
+                  bindings: tab.bindings.filter((binding) => binding.id !== id),
+                  // Leave a removed follow target at its last camera position, with normal orbit controls.
+                  ...(tab.followPose === id
+                    ? { followPose: undefined, camera: tab.camera === 'follow' ? 'orbit' : tab.camera }
+                    : {}),
+                })
+              }
               onTabPatch={patchTab}
               collapsed={dockCollapsed}
               toggle={() => setDockCollapsed(!dockCollapsed)}

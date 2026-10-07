@@ -10,13 +10,21 @@ import { usePlayback } from '../playback/PlaybackProvider';
 import { toRpy } from '../math/rotation';
 import { fieldValue, findField } from '../workspace/fieldCatalog';
 import type { Binding, Field, PreparedField, ViewTab } from '../workspace/types';
-import { spatialLayers } from '../workspace/spatial';
+import { followablePoses, spatialLayers } from '../workspace/spatial';
 import { drone } from './models';
 import { visualizationTheme } from '../theme';
+import { FollowPoseMenu } from '../components/FollowPoseMenu';
 
 const cameras = new Map<
   string,
-  { position: THREE.Vector3; target: THREE.Vector3; extent: string; follow: boolean; quaternion: THREE.Quaternion }
+  {
+    position: THREE.Vector3;
+    target: THREE.Vector3;
+    extent: string;
+    mode: ViewTab['camera'];
+    follow: boolean;
+    quaternion: THREE.Quaternion;
+  }
 >();
 const nominalRotors = [
   [0.17678, -0.17678, 0],
@@ -87,12 +95,15 @@ export function WorkspaceScene({
   runs,
   prepared,
   onCameraMode,
+  onFollowPose,
 }: {
   tab: ViewTab;
   fields: Field[];
   runs: Run[];
   prepared: Record<string, PreparedField>;
   onCameraMode: (mode: ViewTab['camera']) => void;
+  /** Select a trajectory binding and enter follow mode in one tab update. */
+  onFollowPose: (bindingId: string) => void;
 }) {
   const playback = usePlayback();
   const host = useRef<HTMLDivElement>(null);
@@ -102,6 +113,8 @@ export function WorkspaceScene({
   const [gridSpacing, setGridSpacing] = useState('');
   const controlsApi = useRef<{ fit: () => void; mode: (mode: string) => void } | null>(null);
   const vehicle = tab.type === 'vehicle';
+  const followPoses = followablePoses(tab, fields);
+  const selectedFollowPose = followPoses.find((binding) => binding.id === tab.followPose);
 
   useEffect(() => {
     const container = host.current!;
@@ -125,6 +138,8 @@ export function WorkspaceScene({
     camera.up.set(0, 0, 1);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    // Following locks the orbit center to the moving pose while keeping rotation and zoom available.
+    controls.enablePan = tab.camera !== 'follow';
     const ambient = new THREE.HemisphereLight('#d4e3f4', '#263444', 2.5);
     scene.add(ambient);
     const light = new THREE.DirectionalLight('#ffffff', 3);
@@ -262,6 +277,9 @@ export function WorkspaceScene({
     const worldAxes = new THREE.AxesHelper(vehicle ? 0.65 : Math.max(0.5, radius / 4));
     worldAxes.visible = !vehicle || tab.worldAxes;
     scene.add(worldAxes);
+    const followedPose =
+      !vehicle && tab.camera === 'follow' ? poses.find((item) => item.binding.id === tab.followPose) : undefined;
+    const followDisplacement = new THREE.Vector3();
 
     /**
      * Fit full prepared path bounds, or the nominal centered vehicle, without rescanning telemetry.
@@ -276,7 +294,7 @@ export function WorkspaceScene({
     /**
      * Place the camera in a standard ENU view while retaining the orbit target.
      *
-     * @param value Orbit, top, or side camera preset in the ENU frame.
+     * @param value Orbit, top, side, or a close follow view in the ENU frame.
      * @returns Nothing; changes camera position while retaining the current orbit target.
      */
     const mode = (value: string) => {
@@ -286,13 +304,14 @@ export function WorkspaceScene({
           : value === 'side'
             ? new THREE.Vector3(0, -2.8, 0.1)
             : new THREE.Vector3(1.4, -1.8, 1.25);
-      camera.position.copy(controls.target).add(direction.multiplyScalar(radius));
+      const distance = value === 'follow' ? Math.max(1, followedPose?.binding.scale ?? 1) * 2 : radius;
+      camera.position.copy(controls.target).add(direction.multiplyScalar(distance));
       controls.update();
     };
     fit();
     const saved = cameras.get(tab.id);
 
-    if (saved && saved.extent === extent) {
+    if (saved && (saved.extent === extent || tab.camera === 'follow' || saved.mode === 'follow')) {
       camera.position.copy(saved.position);
       controls.target.copy(saved.target);
       if (vehicle && saved.follow !== tab.followOrientation) {
@@ -301,12 +320,16 @@ export function WorkspaceScene({
         camera.position.applyQuaternion(rotation);
       }
       controls.update();
+      // Ending follow keeps the current viewpoint; explicit toolbar presets have already placed the camera.
+      if (saved.mode !== tab.camera && !(saved.mode === 'follow' && tab.camera === 'orbit')) mode(tab.camera);
     } else mode(tab.camera);
     controlsApi.current = { fit, mode };
 
     const resize = new ResizeObserver(() => {
       const width = Math.max(1, container.clientWidth);
       const height = Math.max(1, container.clientHeight);
+      // Keep the follow menu scrollable within the clipped viewport when the dock reduces its height.
+      container.parentElement?.style.setProperty('--scene-height', `${height}px`);
       renderer.setSize(width, height);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
@@ -488,6 +511,12 @@ export function WorkspaceScene({
           arrow(item.arrows[0], origin, direction, item.binding.scale);
         }
       }
+      if (followedPose?.root.visible) {
+        // Move the camera by the target's displacement, preserving the user's orbit angle and zoom distance.
+        // Invalid/out-of-coverage positions hide the root above, so the last valid camera position is retained.
+        camera.position.add(followDisplacement.subVectors(followedPose.root.position, controls.target));
+        controls.target.copy(followedPose.root.position);
+      }
       controls.update();
       renderedCamera.copy(camera);
       if (vehicle && tab.followOrientation) {
@@ -505,6 +534,7 @@ export function WorkspaceScene({
         position: camera.position.clone(),
         target: controls.target.clone(),
         extent,
+        mode: tab.camera,
         follow: tab.followOrientation,
         quaternion: lastQuaternion.clone(),
       });
@@ -534,7 +564,7 @@ export function WorkspaceScene({
   return (
     <div className="scene-view" data-testid={`${tab.type}-view`}>
       <div ref={host} className="scene-canvas" />
-      <div className="scene-toolbar">
+      <div className="scene-toolbar" role="group" aria-label="3D view controls">
         <span>World ENU · Body FLU</span>
         <button
           onClick={() => {
@@ -545,6 +575,7 @@ export function WorkspaceScene({
           Fit
         </button>
         <button
+          aria-pressed={tab.camera === 'orbit'}
           onClick={() => {
             controlsApi.current?.mode('orbit');
             onCameraMode('orbit');
@@ -553,6 +584,7 @@ export function WorkspaceScene({
           Orbit
         </button>
         <button
+          aria-pressed={tab.camera === 'top'}
           onClick={() => {
             controlsApi.current?.mode('top');
             onCameraMode('top');
@@ -561,6 +593,7 @@ export function WorkspaceScene({
           Top
         </button>
         <button
+          aria-pressed={tab.camera === 'side'}
           onClick={() => {
             controlsApi.current?.mode('side');
             onCameraMode('side');
@@ -568,6 +601,25 @@ export function WorkspaceScene({
         >
           Side
         </button>
+        {!vehicle && (
+          <>
+            <button
+              aria-pressed={tab.camera === 'follow'}
+              disabled={!followPoses.length}
+              onClick={() => {
+                // Reuse the tab's selected pose when available; otherwise start with the first visible anchor.
+                const target = selectedFollowPose ?? followPoses[0];
+
+                if (target) onFollowPose(target.id);
+              }}
+            >
+              Follow
+            </button>
+            {tab.camera === 'follow' && (
+              <FollowPoseMenu tab={tab} poses={followPoses} runs={runs} onSelect={onFollowPose} />
+            )}
+          </>
+        )}
       </div>
       {!vehicle && (
         <div className="scene-legend">

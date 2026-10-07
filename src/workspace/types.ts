@@ -72,7 +72,9 @@ export interface ViewTab {
   name: string;
   type: ViewType;
   bindings: Binding[];
-  camera: 'orbit' | 'top' | 'side';
+  camera: 'orbit' | 'top' | 'side' | 'follow';
+  /** Trajectory binding whose sampled position centers the follow camera; independent for each tab. */
+  followPose?: string;
   followOrientation: boolean;
   bodyAxes: boolean;
   worldAxes: boolean;

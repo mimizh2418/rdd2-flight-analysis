@@ -691,19 +691,62 @@ output,
   position: absolute;
   top: 10px;
   left: 14px;
+  right: 14px;
   display: flex;
   align-items: center;
   gap: 5px;
   font-size: 10px;
   color: var(--muted);
 }
-.scene-toolbar span {
+.scene-toolbar > span {
   margin-right: 8px;
 }
-.scene-toolbar button {
+.scene-toolbar button,
+.follow-pose-menu > summary {
   font-size: 10px;
   padding: 4px 7px;
   background: var(--overlay);
+}
+.follow-pose-menu {
+  min-width: 0;
+  max-width: 240px;
+}
+.follow-pose-menu > summary,
+.follow-pose-menu > div button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.follow-pose-menu svg {
+  width: 24px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.follow-pose-menu .menu-chevron {
+  width: 10px;
+  height: 10px;
+}
+.follow-pose-label {
+  min-width: 0;
+}
+.follow-pose-menu > summary .follow-pose-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.follow-pose-menu > div {
+  left: auto;
+  right: 0;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 28px));
+  max-height: min(300px, calc(var(--scene-height, 100dvh) - 48px));
+  overflow-y: auto;
+}
+.follow-pose-menu > div button {
+  white-space: normal;
+}
+.scene-toolbar button[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .scene-key {
   position: absolute;
@@ -1367,7 +1410,7 @@ pre {
   .binding-lane {
     padding: 0 5px 5px;
   }
-  .scene-toolbar span {
+  .scene-toolbar > span {
     display: none;
   }
   .status-bar > span:nth-child(2) {

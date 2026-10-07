@@ -210,7 +210,10 @@ export function validateWorkspace(value: unknown): WorkspaceDocument {
       tabIds.has(tab.id) ||
       !['trajectory', 'graph', 'vehicle'].includes(tab.type) ||
       !Array.isArray(tab.bindings) ||
-      !['orbit', 'top', 'side'].includes(tab.camera) ||
+      !['orbit', 'top', 'side', 'follow'].includes(tab.camera) ||
+      (tab.camera === 'follow' && (tab.type !== 'trajectory' || !tab.followPose)) ||
+      (tab.followPose !== undefined &&
+        (typeof tab.followPose !== 'string' || !tab.bindings.some((binding) => binding.id === tab.followPose))) ||
       !['degrees', 'radians'].includes(tab.angles) ||
       [tab.followOrientation, tab.bodyAxes, tab.worldAxes].some((item) => typeof item !== 'boolean')
     )
@@ -293,6 +296,12 @@ export function validateWorkspace(value: unknown): WorkspaceDocument {
           orientation: binding.orientation && retired.has(binding.orientation.runId) ? undefined : binding.orientation,
         })),
     }));
+    for (const tab of document.tabs) {
+      if (tab.followPose && !tab.bindings.some((binding) => binding.id === tab.followPose)) {
+        tab.followPose = undefined;
+        if (tab.camera === 'follow') tab.camera = 'orbit';
+      }
+    }
     if (!document.runs.length) {
       document.time = 0;
       document.window = [0, 1];

@@ -90,10 +90,18 @@ export function PlaybackProvider({
 
   const previousAlignment = useRef(alignment);
   const previousSources = useRef(hasSources);
+  const previousRunIds = useRef(new Set(runs.map((run) => run.id)));
   useEffect(() => {
+    const importedRun = runs.some((run) => !previousRunIds.current.has(run.id));
+    previousRunIds.current = new Set(runs.map((run) => run.id));
+
+    // Fit every successful import, even when its coverage matches existing logs and the domain is unchanged.
+    // Source removal and ordinary playback updates preserve the current zoom.
+    if (importedRun && hasSources) updateWindow(domain);
+
     // The first imported log supplies the real clock. An empty registry must not preserve a fabricated 0–1 window.
     if (!previousSources.current && hasSources) {
-      updateWindow(initial && initial.runs?.length !== 0 ? clampWindow(initial.window, domain) : domain);
+      updateWindow(domain);
       updateTime(
         initial && initial.runs?.length !== 0 ? Math.max(domain[0], Math.min(domain[1], initial.time)) : domain[0],
       );
@@ -107,7 +115,7 @@ export function PlaybackProvider({
     updateTime((value) => Math.max(domain[0], Math.min(domain[1], value)));
     updateWindow((current) => clampWindow(current, domain));
     updatePreview(null);
-  }, [domain, alignment, hasSources]);
+  }, [domain, alignment, hasSources, runs]);
 
   /**
    * Commit a displayed time and reveal its cursor in a zoomed window.
