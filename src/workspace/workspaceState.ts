@@ -59,7 +59,8 @@ export function createBinding(field: Field, lane: Lane, index: number): Binding 
     color: colorPresets[index % colorPresets.length].color,
     style: field.id.includes('reference') ? 'dashed' : 'solid',
     width: 1.5,
-    model: field.orientation || field.type === 'orientation' ? 'drone' : 'ball',
+    model:
+      field.orientation || field.type === 'orientation' || field.prefix === 'reference.position' ? 'drone' : 'ball',
     scale: 1,
     visible: true,
     fullPath: true,

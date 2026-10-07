@@ -223,7 +223,11 @@ export function AppearanceControls({
               }}
             >
               <option value="auto">
-                {field?.orientation || field?.type === 'orientation' ? 'Native attitude' : 'No native attitude'}
+                {field?.prefix === 'reference.position'
+                  ? 'Reference yaw'
+                  : field?.orientation || field?.type === 'orientation'
+                    ? 'Native attitude'
+                    : 'No native attitude'}
               </option>
               <option value="none">No attitude</option>
               {orientations.map((candidate) => (

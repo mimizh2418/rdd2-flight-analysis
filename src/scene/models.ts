@@ -1,5 +1,26 @@
 import * as THREE from 'three';
-import type { Vec3 } from '../data/types';
+import type { Quat, Vec3 } from '../data/types';
+
+/**
+ * Apply sampled attitude and choose the drone body or its missing-attitude marker.
+ * @param root Pose model group, including optional drone body/fallback children.
+ * @param quaternion Sampled body-FLU-to-world-ENU x/y/z/w quaternion, or NaNs for missing attitude.
+ * @param keepBodyVisible Keep a reference drone visible at a fixed level heading when attitude is unavailable.
+ * @returns Whether the sampled attitude is valid; body-axis overlays can use this to avoid implying measured attitude.
+ */
+export function updateModelAttitude(root: THREE.Group, quaternion: Quat, keepBodyVisible = false): boolean {
+  const oriented = quaternion.every(Number.isFinite);
+
+  root.userData.oriented = oriented;
+  root.quaternion.set(...(oriented ? quaternion : ([0, 0, 0, 1] as Quat)));
+
+  if (root.userData.body) {
+    root.userData.body.visible = oriented || keepBodyVisible;
+    root.userData.fallback.visible = !root.userData.body.visible;
+  }
+
+  return oriented;
+}
 
 /**
  * Build an FLU procedural quadrotor, plus a position-only marker for samples without valid attitude.

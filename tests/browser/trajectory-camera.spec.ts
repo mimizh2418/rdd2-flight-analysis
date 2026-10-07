@@ -29,7 +29,7 @@ test('trajectory follow tracks the selected pose, preserves zoom, and holds thro
     poseMenu.getByRole('button', { name: 'Truth vehicle pose', exact: true }).locator('[data-appearance=drone]'),
   ).toHaveCount(1);
   await expect(
-    poseMenu.getByRole('button', { name: 'Reference position marker', exact: true }).locator('[data-appearance=ball]'),
+    poseMenu.getByRole('button', { name: 'Reference position marker', exact: true }).locator('[data-appearance=drone]'),
   ).toHaveCount(1);
   await page.mouse.click(10, 10);
   await expect(poseMenu).not.toHaveAttribute('open');
@@ -76,7 +76,7 @@ test('trajectory follow tracks the selected pose, preserves zoom, and holds thro
     .getByRole('button', { name: 'Reference position marker', exact: true })
     .click();
   await expect(poseMenu).not.toHaveAttribute('open');
-  await expect(selector.locator('[data-appearance=ball]')).toHaveCount(1);
+  await expect(selector.locator('[data-appearance=drone]')).toHaveCount(1);
   await expectCameraPosition(page, initial.position);
   await seekTime(page, 1);
   await expectCameraPosition(page, initial.position);

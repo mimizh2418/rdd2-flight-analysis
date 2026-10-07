@@ -159,7 +159,7 @@ export class PreparationService {
     const ids = [...field.signals];
 
     if (field.orientation) ids.push(...[0, 1, 2, 3].map((axis) => `${field.orientation}.${axis}`));
-    if (field.prefix === 'reference.position') ids.push('reference.clock', 'reference.sequence');
+    if (field.prefix === 'reference.position') ids.push('reference.clock', 'reference.sequence', 'reference.yaw');
 
     await this.upload(run, ids, (fraction, stage) => progress(fraction * 0.45, stage), signal);
     const key = `${run.id}:${field.type === 'pose' ? 'position' : field.type}:${field.signals.join(',')}`;

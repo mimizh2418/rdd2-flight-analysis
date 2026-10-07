@@ -7,11 +7,11 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import type { Quat, Run } from '../data/types';
 import { attitude, sample, upperBound, vector } from '../playback/time';
 import { usePlayback } from '../playback/PlaybackProvider';
-import { toRpy } from '../math/rotation';
+import { fromRpy, toRpy } from '../math/rotation';
 import { fieldValue, findField } from '../workspace/fieldCatalog';
 import type { Binding, Field, PreparedField, ViewTab } from '../workspace/types';
 import { followablePoses, spatialLayers } from '../workspace/spatial';
-import { drone } from './models';
+import { drone, updateModelAttitude } from './models';
 import { visualizationTheme } from '../theme';
 import { FollowPoseMenu } from '../components/FollowPoseMenu';
 
@@ -42,6 +42,8 @@ const nominalRotors = [
  * @param offsets Per-source display offsets.
  * @param time Global effective displayed seconds.
  * @returns Normalized x/y/z/w quaternion, or all-NaN when attitude is missing/invalid.
+ * @remarks Reference positions default to logged, held yaw with zero roll/pitch. Missing reference yaw uses a
+ *   fixed level heading. Explicit orientation overrides always take precedence over that display convention.
  */
 export function bindingAttitude(
   binding: Binding,
@@ -62,6 +64,13 @@ export function bindingAttitude(
   const runId = binding.orientation?.runId ?? binding.runId;
   const run = runs.find((item) => item.id === runId);
   const offset = offsets.get(runId);
+
+  if (!binding.orientation && field.prefix === 'reference.position' && run && Number.isFinite(offset)) {
+    const yaw = sample(run, 'reference.yaw', time + offset!);
+
+    // Reference guidance supplies heading rather than full attitude. Keep the marker level without smoothing.
+    return fromRpy([0, 0, Number.isFinite(yaw) ? yaw : 0]);
+  }
 
   return prefix && run && Number.isFinite(offset) ? attitude(run, prefix, time + offset!) : [NaN, NaN, NaN, NaN];
 }
@@ -404,13 +413,8 @@ export function WorkspaceScene({
         item.root.position.set(
           ...(vehicle ? ([0, 0, 0] as [number, number, number]) : (position as [number, number, number])),
         );
-        const oriented = q.every(Number.isFinite);
-        item.root.userData.oriented = oriented;
-        item.root.quaternion.set(...(oriented ? q : ([0, 0, 0, 1] as Quat)));
-        if (item.root.userData.body) {
-          item.root.userData.body.visible = oriented;
-          item.root.userData.fallback.visible = !oriented;
-        }
+        // A reference drone remains a drone even with no attitude or an unavailable orientation override.
+        const oriented = updateModelAttitude(item.root, q, item.field.prefix === 'reference.position');
         item.axes.visible = vehicle && tab.bodyAxes && oriented;
         if (item === poses[0]) {
           primaryQuaternion.copy(item.root.quaternion);
