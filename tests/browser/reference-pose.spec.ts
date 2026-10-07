@@ -32,7 +32,7 @@ test('reference drones default to yaw-only orientation and retain truth/estimate
 
   await expect(model).toHaveValue('drone');
   await expect(orientation).toHaveValue('auto');
-  await expect(orientation.locator('option:checked')).toHaveText('Reference yaw (zero roll/pitch)');
+  await expect(orientation.locator('option:checked')).toHaveText('Reference yaw');
 
   for (const label of ['Truth orientation · reference.csv', 'Estimated orientation · reference.csv']) {
     await orientation.selectOption({ label });
@@ -46,6 +46,6 @@ test('reference drones default to yaw-only orientation and retain truth/estimate
   await model.selectOption('ghost');
   await expect(row.locator('[data-appearance=ghost]')).toHaveCount(1);
   await orientation.selectOption('auto');
-  await expect(orientation.locator('option:checked')).toHaveText('Reference yaw (zero roll/pitch)');
+  await expect(orientation.locator('option:checked')).toHaveText('Reference yaw');
   expect(errors).toEqual([]);
 });

@@ -9,11 +9,12 @@ export interface CameraSnapshot {
 /**
  * Observe the rendered trajectory camera without adding production-only test hooks.
  * @param page Browser page before navigation initializes Three.js or WebGL.
+ * @param canvasLabel Accessible name of the trajectory or centered-vehicle canvas to observe.
  * @returns Promise after installing uniform interception for the trajectory canvas only.
  * @remarks The inverse rigid view transform gives camera position and its world-facing direction.
  */
-export async function observeTrajectoryCamera(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+export async function observeTrajectoryCamera(page: Page, canvasLabel = 'Trajectory 3D view'): Promise<void> {
+  await page.addInitScript((label) => {
     const names = new WeakMap<WebGLUniformLocation, string>();
     const prototype = WebGL2RenderingContext.prototype;
     const location = prototype.getUniformLocation;
@@ -41,11 +42,7 @@ export async function observeTrajectoryCamera(page: Page): Promise<void> {
     prototype.uniformMatrix4fv = function (...args: Parameters<typeof matrix>) {
       const canvas = this.canvas as HTMLCanvasElement;
 
-      if (
-        args[0] &&
-        names.get(args[0]) === 'viewMatrix' &&
-        canvas.getAttribute('aria-label') === 'Trajectory 3D view'
-      ) {
+      if (args[0] && names.get(args[0]) === 'viewMatrix' && canvas.getAttribute('aria-label') === label) {
         const offset = args[3] ?? 0;
         const values = Array.from(args[2]).slice(offset, offset + 16);
         const [x, y, z] = values.slice(12, 15);
@@ -63,7 +60,7 @@ export async function observeTrajectoryCamera(page: Page): Promise<void> {
 
       matrix.call(this, ...args);
     };
-  });
+  }, canvasLabel);
 }
 
 /**

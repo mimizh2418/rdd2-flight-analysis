@@ -39,6 +39,8 @@ test('trajectory follow tracks the selected pose, preserves zoom, and holds thro
   await expect(selector).toBeFocused();
   await page.getByRole('slider', { name: 'Timeline' }).press('Home');
 
+  // The follow preset now eases into place; begin motion checks after the destination is actually rendered.
+  await expectCameraPosition(page, [2.8, -3.6, 3.5]);
   const initial = await trajectoryCamera(page);
 
   await page.getByRole('slider', { name: 'Timeline' }).press('End');
@@ -168,6 +170,7 @@ test('follow retains the last valid camera position at missing pose samples', as
   await expect(page.locator('.binding[aria-busy=true]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Follow', exact: true }).click();
 
+  await expectCameraPosition(page, [2.8, -3.6, 3.5]);
   const initial = await trajectoryCamera(page);
 
   await seekTime(page, 1);
