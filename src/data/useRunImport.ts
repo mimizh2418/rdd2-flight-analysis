@@ -2,6 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import type { Manifest, Run } from './types';
 import { validateManifest } from './normalize';
 
+export interface ImportStatus {
+  /** Stable batch identity, independent of progress updates and selected filenames. */
+  id: number;
+  phase: 'loading' | 'complete';
+  fraction: number;
+  stage: string;
+}
+
 /**
  * Import local CSV/manifest batches in workers, publishing only fully successful batches.
  * @param onComplete Receives new runs after all selected files have passed parsing and hash verification.
@@ -9,7 +17,7 @@ import { validateManifest } from './normalize';
  * @returns File loader, cancellation action, and current batch progress.
  */
 export function useRunImport(onComplete: (runs: Run[]) => void, onError: (error: string) => void) {
-  const [status, setStatus] = useState<{ fraction: number; stage: string } | null>(null);
+  const [status, setStatus] = useState<ImportStatus | null>(null);
   const token = useRef(0);
   const callbacks = useRef({ onComplete, onError });
   callbacks.current = { onComplete, onError };
@@ -43,11 +51,13 @@ export function useRunImport(onComplete: (runs: Run[]) => void, onError: (error:
   const load = async (files: File[]) => {
     cancel();
     const batch = token.current;
-    callbacks.current.onError('');
     try {
       const csvs = files.filter((file) => /\.csv$/i.test(file.name));
 
       if (!csvs.length) throw new Error('Select a CSV, optionally together with its manifest.json.');
+
+      // Start one stable notification before any asynchronous reads; quick batches need not display it.
+      setStatus({ id: batch, phase: 'loading', fraction: 0, stage: `${csvs[0].name}: Preparing import` });
 
       const manifests: Manifest[] = [];
 
@@ -87,7 +97,12 @@ export function useRunImport(onComplete: (runs: Run[]) => void, onError: (error:
             const message = event.data;
 
             if (message.type === 'progress')
-              setStatus({ fraction: message.fraction, stage: `${file.name}: ${message.stage}` });
+              setStatus({
+                id: batch,
+                phase: 'loading',
+                fraction: message.fraction,
+                stage: `${file.name}: ${message.stage}`,
+              });
             if (message.type === 'complete') {
               finish();
               resolve(message.run);
@@ -106,7 +121,12 @@ export function useRunImport(onComplete: (runs: Run[]) => void, onError: (error:
         imported.push(run);
       }
       if (batch === token.current) {
-        setStatus(null);
+        setStatus({
+          id: batch,
+          phase: 'complete',
+          fraction: 1,
+          stage: csvs.map((file) => file.name).join(', '),
+        });
         // Source removals and tab edits made during the import must survive its eventual publication.
         callbacks.current.onComplete(imported);
       }

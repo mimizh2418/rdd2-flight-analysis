@@ -35,7 +35,7 @@ test('verified bundle, independent export interval, full-resolution statistics a
   expect(errors).toEqual([]);
 });
 
-test('malformed CSV, invalid workspace, and bad hash leave current data intact', async ({ page }) => {
+test('import failures preserve current data and stack independently dismissible errors', async ({ page }) => {
   const errors = watchErrors(page);
 
   await page.goto('/');
@@ -52,12 +52,92 @@ test('malformed CSV, invalid workspace, and bad hash leave current data intact',
       uploadFile('manifest.json', JSON.stringify({ ...createManifest(flightCsv), csv_sha256: '0'.repeat(64) })),
     ]);
 
-  await expect(page.getByRole('alert')).toContainText('CSV SHA-256 does not match');
+  await expect(page.getByRole('alert').filter({ hasText: 'CSV SHA-256 does not match' })).toBeVisible();
 
   await page.getByTestId('workspace-input').setInputFiles(uploadFile('workspace.json', '{"schema":"bad"}'));
 
-  await expect(page.getByRole('alert')).toContainText('Expected an rdd2-workspace-v1');
+  await expect(page.getByRole('alert').filter({ hasText: 'Expected an rdd2-workspace-v1' })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(3);
+
+  // Dismissing the middle notification must not remove earlier or later failures.
+  await page
+    .locator('.error-toast')
+    .filter({ hasText: 'CSV SHA-256 does not match' })
+    .getByRole('button', { name: 'Dismiss error' })
+    .click();
+
+  await expect(page.getByRole('alert')).toHaveCount(2);
+  await expect(page.getByRole('alert').filter({ hasText: 'expected 2 fields' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Expected an rdd2-workspace-v1' })).toBeVisible();
   await expect(page.locator('.run-title')).toContainText('Analytic flight');
+  expect(errors).toEqual([]);
+});
+
+test('import toasts suppress quick flashes and retain stable, cancellable feedback for longer batches', async ({
+  page,
+}) => {
+  const errors = watchErrors(page);
+
+  await page.addInitScript(() => {
+    const original = Worker.prototype.postMessage;
+
+    Worker.prototype.postMessage = function (this: Worker, message: { file?: File }, transfer?: Transferable[]) {
+      if (!message.file) return original.call(this, message, transfer ?? []);
+
+      // Control notification timing independently of machine speed; normal imports still use the real worker.
+      if (message.file.name === 'quick.csv') {
+        setTimeout(() => {
+          this.dispatchEvent(
+            new MessageEvent('message', { data: { type: 'progress', fraction: 0.5, stage: 'Parsing' } }),
+          );
+          this.dispatchEvent(new MessageEvent('message', { data: { type: 'error', message: 'Quick import failure' } }));
+        }, 0);
+      } else setTimeout(() => original.call(this, message, transfer ?? []), 1000);
+    } as typeof original;
+
+    const observed = { mounts: 0, element: null as Element | null };
+    Object.defineProperty(window, 'importToastObserver', { value: observed });
+    new MutationObserver((records) => {
+      for (const record of records)
+        for (const node of record.addedNodes)
+          if (node instanceof Element && node.matches('.import-toast')) observed.mounts++;
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.goto('/');
+  await page.getByTestId('trace-input').setInputFiles(uploadFile('quick.csv', poseCsv));
+
+  await expect(page.getByRole('alert')).toContainText('Quick import failure');
+  await page.waitForTimeout(250);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { importToastObserver: { mounts: number } }).importToastObserver.mounts,
+    ),
+  ).toBe(0);
+
+  await page.getByTestId('trace-input').setInputFiles(uploadFile('pose.csv', poseCsv));
+  await expect(page.getByRole('button', { name: 'Cancel import' })).toBeVisible();
+  await page.evaluate(() => {
+    (window as unknown as { importToastObserver: { element: Element | null } }).importToastObserver.element =
+      document.querySelector('.import-toast');
+  });
+  await expect(page.locator('.run-title')).toHaveText('pose.csv');
+  await expect(page.locator('.import-toast')).toContainText('CSV imported');
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { importToastObserver: { element: Element | null } }).importToastObserver.element ===
+        document.querySelector('.import-toast'),
+    ),
+  ).toBe(true);
+
+  // A new pending batch stacks with the retained completion and previous failure; cancellation removes only it.
+  await page.getByTestId('trace-input').setInputFiles(uploadFile('later.csv', poseCsv));
+  await expect(page.locator('.import-toast')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Cancel import' }).click();
+  await expect(page.locator('.import-toast')).toHaveCount(1);
+  await expect(page.locator('.import-toast')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toContainText('Quick import failure');
+  await expect(page.locator('.run-title')).toHaveText('pose.csv');
   expect(errors).toEqual([]);
 });
 

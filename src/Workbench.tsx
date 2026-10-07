@@ -11,6 +11,7 @@ import { FieldBrowser } from './components/FieldBrowser';
 import { BindingDock } from './components/BindingDock';
 import { DroneIcon } from './components/DroneIcon';
 import { SimulationPanel } from './components/SimulationPanel';
+import { WorkbenchToasts, type ErrorNotification } from './components/WorkbenchToasts';
 import { WorkspaceScene } from './scene/WorkspaceScene';
 import { GraphView } from './charts/GraphView';
 import { buildCatalog, findField, graphSignalIds } from './workspace/fieldCatalog';
@@ -51,7 +52,7 @@ export function Workbench({
   const tab = tabs.find((item) => item.id === active);
   const [runId, setRunId] = useState(runs[0]?.id ?? 'all');
   const [panel, setPanel] = useState<'runs' | 'simulation' | 'export' | null>(null);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<ErrorNotification[]>([]);
   const [notice, setNotice] = useState('');
   const [dragged, setDragged] = useState<Field | null>(null);
 
@@ -82,6 +83,17 @@ export function Workbench({
   const { service, prepared, loading } = usePreparation(runs, fields, tabs);
   const selectedRun = runs.find((run) => run.id === runId) ?? runs[0];
   const offset = selectedRun ? (playback.offsets.get(selectedRun.id) ?? NaN) : NaN;
+
+  /**
+   * Queue a recoverable failure without replacing earlier notifications.
+   * @param message Error description; empty messages do not dismiss existing notifications.
+   * @returns Nothing; each occurrence receives a stable identity for independent dismissal.
+   */
+  const reportError = useCallback((message: string) => {
+    if (!message) return;
+
+    setErrors((current) => [...current, { id: crypto.randomUUID(), message }]);
+  }, []);
 
   /**
    * Create the versioned configuration document; no source arrays are serialized.
@@ -193,7 +205,7 @@ export function Workbench({
     playback.setPlaying(false);
     setNotice(`${batch.length} run${batch.length === 1 ? '' : 's'} imported`);
   };
-  const importer = useRunImport(imported, setError);
+  const importer = useRunImport(imported, reportError);
 
   /**
    * Update active-tab settings without modifying any other tab's configuration.
@@ -216,7 +228,7 @@ export function Workbench({
     const reason = dropReason(tab, field, lane, fields);
     setDragged(null);
     if (reason) {
-      setError(reason);
+      reportError(reason);
       return;
     }
 
@@ -229,7 +241,7 @@ export function Workbench({
         .filter((component): component is Field => component?.type === 'scalar');
 
       if (components.length !== signalIds.length) {
-        setError('The field components are unavailable; reimport its source log.');
+        reportError('The field components are unavailable; reimport its source log.');
         return;
       }
 
@@ -238,7 +250,6 @@ export function Workbench({
         createBinding(component, lane, tab.bindings.length + index),
       );
       patchTab({ bindings: [...tab.bindings, ...bindings] });
-      setError('');
       return;
     }
 
@@ -254,7 +265,7 @@ export function Workbench({
         );
 
       if (!pose) {
-        setError('Add a position or pose before attaching an orientation source.');
+        reportError('Add a position or pose before attaching an orientation source.');
         return;
       }
       patchTab({
@@ -262,11 +273,10 @@ export function Workbench({
           binding.id === pose.id ? { ...binding, orientation: { runId: field.runId, fieldId: field.id } } : binding,
         ),
       });
-      setError('');
       return;
     }
     if (tab.type === 'vehicle' && lane === 'vehicle' && tab.bindings.some((binding) => binding.lane === 'vehicle')) {
-      setError('Remove the current vehicle field before choosing a different centered vehicle.');
+      reportError('Remove the current vehicle field before choosing a different centered vehicle.');
       return;
     }
     if (
@@ -277,7 +287,7 @@ export function Workbench({
         ['position', 'pose'].includes(findField(fields, binding.runId, binding.fieldId)?.type ?? ''),
       )
     ) {
-      setError('Add a pose before attaching its velocity vector.');
+      reportError('Add a pose before attaching its velocity vector.');
       return;
     }
 
@@ -296,7 +306,6 @@ export function Workbench({
         )?.id;
     }
     patchTab({ bindings: [...tab.bindings, binding] });
-    setError('');
   };
 
   /**
@@ -318,7 +327,7 @@ export function Workbench({
         : '';
 
       if (reason) {
-        setError(reason);
+        reportError(reason);
         return;
       }
     }
@@ -484,9 +493,8 @@ export function Workbench({
         pendingRestore.current = undefined;
       }
       setNotice('Workspace loaded. Reattach missing source files by importing their original CSVs.');
-      setError('');
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      reportError(failure instanceof Error ? failure.message : String(failure));
     }
   };
 
@@ -538,9 +546,8 @@ export function Workbench({
         if (!ids.length) throw new Error('This tab has no fields from the selected export run.');
         await exportCsv(selectedRun, ids, simulationInterval);
       }
-      setError('');
     } catch (failure) {
-      if (!(failure instanceof DOMException && failure.name === 'AbortError')) setError(String(failure));
+      if (!(failure instanceof DOMException && failure.name === 'AbortError')) reportError(String(failure));
     } finally {
       setExporting(false);
     }
@@ -731,27 +738,19 @@ export function Workbench({
         </button>
         <TransportControls disabled={!runs.length} />
       </nav>
-      {importer.status && (
-        <div className="import-status" role="status">
-          <span>{importer.status.stage}</span>
-          <progress max={1} value={importer.status.fraction} />
-          <button onClick={importer.cancel}>Cancel import</button>
-        </div>
-      )}
-      {error && (
-        <div className="message error" role="alert">
-          {error}
-          <button className="flat" aria-label="Dismiss error" onClick={() => setError('')}>
-            ×
-          </button>
-        </div>
-      )}
-      {!!unaligned.length && (
-        <div className="message" role="status">
-          Missing alignment event: {unaligned.map((run) => run.name).join(', ')}. Choose Absolute time or another
-          exported alignment.
-        </div>
-      )}
+      <WorkbenchToasts
+        progress={importer.status}
+        cancelImport={importer.cancel}
+        errors={errors}
+        dismissError={(id) => setErrors((current) => current.filter((item) => item.id !== id))}
+        warning={
+          unaligned.length
+            ? `Missing alignment event: ${unaligned.map((run) => run.name).join(', ')}. ` +
+              'Choose Absolute time or another exported alignment.'
+            : ''
+        }
+        warningKey={JSON.stringify([playback.alignment, unaligned.map((run) => run.id)])}
+      />
       <div className="workspace-body">
         <FieldBrowser
           fields={fields}
