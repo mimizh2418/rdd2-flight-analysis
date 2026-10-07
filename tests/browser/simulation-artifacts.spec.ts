@@ -72,7 +72,6 @@ test('large GPS trace loads fields asynchronously with progress and cancellation
   expect(responsiveness.maxGap).toBeLessThan(500);
 
   console.log('GPS field-loading responsiveness:', responsiveness);
-  await page.screenshot({ path: 'artifacts/validation/workspace-gps.png' });
 
   expect(errors).toEqual([]);
 });
@@ -100,8 +99,6 @@ test('fresh Rumoca export verifies and renders trajectory and centered vehicle',
 
   await expect(page.getByText('Camera follows body orientation')).toBeVisible();
   await expect(page.locator('.webgl-fallback')).toHaveCount(0);
-
-  await page.screenshot({ path: 'artifacts/validation/workspace-vehicle.png' });
 
   expect(errors).toEqual([]);
 });

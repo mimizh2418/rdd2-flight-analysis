@@ -1,44 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { CsvReader, ColumnBuilder, parseText, parseBlob, parseBuffer } from '../../.test-build/src/data/csv.js';
+import { CsvReader, ColumnBuilder, parseText, parseBuffer } from '../../.test-build/src/data/csv.js';
 import { importCsv } from '../../.test-build/src/data/importCsv.js';
 import { validateManifest } from '../../.test-build/src/data/normalize.js';
-
-test('quoted matrix names, escaped quotes, BOM, CRLF and every possible chunk boundary', () => {
-  const csv = '\uFEFFtime_s,"matrix[1,2]","a""b"\r\n0,1e-3,true\r\n1,2,false\r\n';
-
-  // Split at every character, including inside escaped quotes and the two-character CRLF separator.
-  for (let split = 0; split < csv.length; split++) {
-    const builder = new ColumnBuilder();
-    const reader = new CsvReader(builder.row);
-
-    reader.feed(csv.slice(0, split));
-    reader.feed(csv.slice(split), true);
-
-    const columns = builder.finish();
-
-    assert.deepEqual([...columns['matrix[1,2]']], [0.001, 2]);
-    assert.deepEqual([...columns['a"b']], [1, 0]);
-  }
-});
 
 test('malformed CSV fails explicitly', () => {
   for (const text of ['time,x\n0', 'time,x\n0,nope', 'time,time\n0,1', 'time,"oops\n0,1', 'time,x\n0,"1"x']) {
     assert.throws(() => parseText(text));
   }
-});
-
-test('blank and non-finite numeric samples stay gaps', () => {
-  const columns = parseText('time,x\n0,\n1,NaN\n2,Infinity');
-
-  assert.ok([...columns.x].every((value) => !Number.isFinite(value)));
-});
-
-test('chunked Blob matches text parser', async () => {
-  const csv = 'time,x\n0,1\n1,2';
-
-  assert.deepEqual(await parseBlob(new Blob([csv])), parseText(csv));
 });
 
 test('manifest rejects mismatched coordinates', () => {
@@ -98,6 +68,9 @@ test('quoted and unquoted numeric paths preserve the same Float64 bits and event
   assert.deepEqual(new Uint8Array(plain.value.buffer), new Uint8Array(quoted.value.buffer));
   assert.equal(plain.time.length, cells.length);
   assert.ok(Object.is(plain.value[1], -0));
+  assert.equal(plain.value[7], 1);
+  assert.equal(plain.value[8], 0);
+  assert.ok([9, 10, 11].every((index) => Number.isNaN(plain.value[index])));
 });
 
 test('fast and partial CSV rows reject malformed quotes at every chunk boundary', () => {

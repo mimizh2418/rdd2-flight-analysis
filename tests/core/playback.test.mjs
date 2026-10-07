@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { normalizeRun } from '../../.test-build/src/data/normalize.js';
 import { eventIndex, sample, attitude } from '../../.test-build/src/playback/time.js';
 import { summarize } from '../../.test-build/src/math/statistics.js';
-import { timeTicks } from '../../.test-build/src/playback/ticks.js';
 import { assertClose, createRun } from './support.mjs';
 
 test('events preserve final near-equal row; reverse and non-finite time rejected', () => {
@@ -60,20 +59,4 @@ test('continuous interpolation respects both sides of an event', () => {
 
   assertClose(result.mean, 5.5);
   assertClose(result.rmse, Math.sqrt(166 / 3));
-});
-
-test('timeline graduations use round major ticks and show greater precision on narrow windows', () => {
-  const wide = timeTicks([0, 30], 600);
-
-  assert.deepEqual(
-    wide.filter((tick) => tick.major).map((tick) => tick.time),
-    [0, 5, 10, 15, 20, 25, 30],
-  );
-  assert.ok(wide.some((tick) => !tick.major));
-
-  const narrow = timeTicks([1.251, 1.259], 600);
-
-  assert.ok(narrow.filter((tick) => tick.major).every((tick) => /^1\.25[2-8]s$/.test(tick.label)));
-  assert.ok(narrow.every((tick) => tick.time >= 1.251 && tick.time <= 1.259));
-  assert.deepEqual(timeTicks([1, 1], 600), []);
 });

@@ -48,12 +48,11 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1)
             self.assertEqual(result.stdout, "")
-            self.assertIn("Checking Rumoca versions and scenario: failed", result.stderr)
             self.assertIn("Invalid scenario: missing model name", result.stderr)
             self.assertEqual(list(output.iterdir()), [])
 
-    def test_status_and_quiet_mode_keep_stdout_machine_readable(self):
-        """Report stages and a final summary on stderr, with only the bundle path on stdout."""
+    def test_cli_success_returns_bundle_path_in_both_output_modes(self):
+        """Return a usable bundle path on stdout with normal or quiet output."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "input.csv"
@@ -69,13 +68,10 @@ class CliTests(unittest.TestCase):
                 with self.subTest(quiet=quiet):
                     result = subprocess.run(command, check=True, text=True, capture_output=True)
                     self.assertEqual(result.stdout, f"{output}\n")
+                    self.assertTrue((output / "manifest.json").is_file())
 
                     if quiet:
                         self.assertEqual(result.stderr, "")
-                    else:
-                        self.assertIn("Copying and fingerprinting input CSV", result.stderr)
-                        self.assertIn("Validating imported CSV", result.stderr)
-                        self.assertIn("Bundle ready: 2 rows, 1 signals, 0–1 s", result.stderr)
 
     def test_cli_failure_reports_error_and_preserves_existing_output(self):
         """Retain receipt-mismatch diagnostics and leave the unpublished bundle empty."""

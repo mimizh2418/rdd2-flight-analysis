@@ -70,7 +70,7 @@ and actions in their support modules. `npm test` discovers all core `*.test.mjs`
 `*.spec.ts` suites. To run one browser suite, use `npm run test:browser -- tests/browser/playback.spec.ts`.
 
 [GitHub Actions](.github/workflows/ci.yml) runs formatting checks, core/Python tests, the production build, and browser
-tests on every push and pull request. Browser reports, failure traces, and screenshots are retained for 14 days;
+tests on every push and pull request. Browser reports and failure traces are retained for 14 days;
 the two simulation-artifact tests skip until their log fixtures are supplied.
 
 ## Development

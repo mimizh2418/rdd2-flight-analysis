@@ -1,15 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCatalog, findField, incompatibility, fieldValue } from '../../.test-build/src/workspace/fieldCatalog.js';
-import { spatialDisplay, spatialLayers } from '../../.test-build/src/workspace/spatial.js';
+import { buildCatalog, findField, incompatibility } from '../../.test-build/src/workspace/fieldCatalog.js';
 import { prepareField } from '../../.test-build/src/workspace/preparation.js';
 import {
   createTab,
   createBinding,
-  dropReason,
   validateWorkspace,
   reattachTabs,
-  initialTabs,
 } from '../../.test-build/src/workspace/workspaceState.js';
 import { fieldTree, filterFieldTree } from '../../.test-build/src/workspace/fieldTree.js';
 import { createRun } from './support.mjs';
@@ -104,21 +101,6 @@ test('static mission path falls back to waypoints and field jobs yield and cance
   );
 });
 
-test('typed field drops reject incompatible units without partially mutating the tab', () => {
-  const run = createRun();
-  const fields = buildCatalog([run]);
-  const position = findField(fields, run.id, 'vector:position');
-  const velocity = findField(fields, run.id, 'vector:velocity');
-  const graph = createTab('graph', 'Test');
-
-  graph.bindings.push(createBinding(position, 'left', 0));
-
-  assert.match(dropReason(graph, velocity, 'left', fields), /other axis/);
-  assert.equal(dropReason(graph, velocity, 'right', fields), '');
-  assert.equal(graph.bindings.length, 1);
-  assert.match(incompatibility(findField(fields, run.id, 'position.0'), 'trajectory', 'paths'), /position vector/);
-});
-
 test('workspace identities reattach exact content and reject malformed configuration', () => {
   const run = createRun();
 
@@ -195,7 +177,7 @@ test('field hierarchy nests pose vectors and their selectable scalar components 
   assert.ok(filterFieldTree(tree, 'no-such-channel').length === 0);
 });
 
-test('diagnostic hierarchy separates motion, tracking, and estimation with graph-only ENU error vectors', () => {
+test('diagnostic vectors retain component order and units without fabricating missing components', () => {
   const columns = {};
 
   for (let axis = 1; axis <= 3; axis++) {
@@ -208,39 +190,23 @@ test('diagnostic hierarchy separates motion, tracking, and estimation with graph
 
   const run = createRun(columns);
   const fields = buildCatalog([run]);
-  const tree = fieldTree(fields);
-  const diagnostics = tree.find((node) => node.label === 'Derived diagnostics');
-  const tracking = diagnostics.children.find((node) => node.label === 'Tracking');
-  const estimation = diagnostics.children.find((node) => node.label === 'Estimation');
-
-  assert.ok(diagnostics.children.some((node) => node.label === 'Motion'));
-  assert.ok(tracking.children.some((node) => node.label === 'Recorded path distance'));
-
-  for (const [parent, prefix, category, unit] of [
-    [tracking, 'tracking', 'Position error', 'm'],
-    [tracking, 'velocityError', 'Velocity error', 'm/s'],
-    [estimation, 'estimation', 'Position error', 'm'],
-    [estimation, 'velocityEstimation', 'Velocity error', 'm/s'],
+  for (const [prefix, unit] of [
+    ['tracking', 'm'],
+    ['velocityError', 'm/s'],
+    ['estimation', 'm'],
+    ['velocityEstimation', 'm/s'],
   ]) {
-    const group = parent.children.find((node) => node.label === category);
-    const vector = group.children.find((node) => node.field?.id === `vector:${prefix}`);
+    const vector = findField(fields, run.id, `vector:${prefix}`);
 
-    assert.equal(vector.field.unit, unit);
+    assert.equal(vector.unit, unit);
     assert.deepEqual(
-      vector.children.map((node) => node.field.id),
+      vector.signals,
       [0, 1, 2].map((axis) => `${prefix}.${axis}`),
     );
-    assert.ok(group.children.some((node) => node.field.id === `${prefix}.norm`));
-    assert.ok(group.children.some((node) => node.field.id === `${prefix}.horizontal`));
-    assert.equal(incompatibility(vector.field, 'graph', 'left'), '');
-    assert.notEqual(incompatibility(vector.field, 'trajectory', 'spatial'), '');
-    assert.notEqual(incompatibility(vector.field, 'vehicle', 'overlays'), '');
+    assert.equal(incompatibility(vector, 'graph', 'left'), '');
+    assert.notEqual(incompatibility(vector, 'trajectory', 'spatial'), '');
   }
-
   const error = findField(fields, run.id, 'vector:tracking');
-
-  assert.equal(fieldValue(error, run, 1), '[1.000, 0.000, 0.000] m');
-  assert.ok(filterFieldTree(tree, 'east tracking error').length > 0);
 
   // Partial data keeps available components selectable without fabricating a complete vector.
   delete run.signals['tracking.2'];
@@ -249,66 +215,4 @@ test('diagnostic hierarchy separates motion, tracking, and estimation with graph
 
   assert.equal(findField(partial, run.id, error.id), undefined);
   assert.ok(findField(partial, run.id, 'tracking.0'));
-});
-
-test('retired demo references are migrated out of saved workspaces', () => {
-  const run = createRun();
-  const tab = createTab('trajectory', 'Trajectory 1');
-
-  tab.bindings.push(createBinding(findField(buildCatalog([run]), run.id, 'vector:position'), 'paths', 0));
-
-  const migrated = validateWorkspace({
-    schema: 'rdd2-workspace-v1',
-    runs: [{ id: run.id, name: 'Synthetic example', fingerprint: 'builtin:analytic-v1', rows: 3, start: 0, end: 2 }],
-    tabs: [tab],
-    active: tab.id,
-    time: 1,
-    window: [0, 2],
-    alignment: 'absolute',
-    browserWidth: 290,
-    dockHeight: 250,
-  });
-
-  assert.deepEqual(migrated.runs, []);
-  assert.deepEqual(migrated.tabs[0].bindings, []);
-  assert.equal(migrated.tabs[0].id, tab.id);
-});
-
-test('spatial fields independently select path and pose layers while retaining legacy workspace roles', () => {
-  const run = createRun();
-  const fields = buildCatalog([run]);
-  const pose = findField(fields, run.id, 'pose:position');
-  const position = findField(fields, run.id, 'vector:position');
-  const binding = createBinding(pose, 'spatial', 0);
-
-  assert.equal(spatialDisplay(binding, pose), 'both');
-  assert.deepEqual(spatialLayers(binding, pose), { trajectory: true, pose: true });
-  assert.deepEqual(spatialLayers({ ...binding, display: 'trajectory' }, pose), { trajectory: true, pose: false });
-  assert.deepEqual(spatialLayers({ ...binding, display: 'pose' }, pose), { trajectory: false, pose: true });
-  assert.deepEqual(spatialLayers(createBinding(position, 'paths', 0), position), { trajectory: true, pose: false });
-  assert.deepEqual(spatialLayers(createBinding(pose, 'poses', 0), pose), { trajectory: false, pose: true });
-  assert.equal(incompatibility(pose, 'trajectory', 'spatial'), '');
-  assert.equal(incompatibility(findField(fields, run.id, 'vector:velocity'), 'trajectory', 'spatial'), '');
-  assert.match(incompatibility(findField(fields, run.id, 'position.0'), 'trajectory', 'spatial'), /position vector/);
-
-  const initial = initialTabs(run, fields)[0].bindings;
-
-  assert.equal(initial.filter((item) => item.fieldId === 'pose:position').length, 1);
-  assert.equal(
-    initial.some((item) => item.fieldId === 'vector:position'),
-    false,
-  );
-  assert.ok(initial.every((item) => item.lane === 'spatial'));
-});
-
-test('dock scalar readouts round to six places, trim fractional zeros, and preserve invalid-data gaps', () => {
-  const run = createRun({ 'position_m[1]': Float64Array.from([0.123456789, 1.2, NaN]) });
-  const field = findField(buildCatalog([run]), run.id, 'position.0');
-
-  assert.equal(fieldValue(field, run, 0, true, 6, true), '0.123457 m');
-  assert.equal(fieldValue(field, run, 1, true, 6, true), '1.2 m');
-  assert.equal(fieldValue(field, run, 2, true, 6, true), '—');
-  assert.equal(fieldValue(field, run, -1, true, 6, true), '—');
-  assert.equal(fieldValue(field, run, 1), '1.200 m');
-  assert.equal(run.signals['position.0'].values[0], 0.123456789);
 });

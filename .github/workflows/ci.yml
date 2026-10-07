@@ -90,7 +90,7 @@ jobs:
         id: tests
         run: npm run test:browser -- --forbid-only --trace=retain-on-failure --reporter=line,html
 
-      - name: Upload browser reports, traces, and screenshots
+      - name: Upload browser reports and traces
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -98,7 +98,6 @@ jobs:
           path: |
             playwright-report/
             test-results/
-            artifacts/validation/
           if-no-files-found: warn
           retention-days: 14
 

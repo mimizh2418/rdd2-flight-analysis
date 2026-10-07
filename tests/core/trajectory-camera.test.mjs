@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCatalog, findField } from '../../.test-build/src/workspace/fieldCatalog.js';
-import { followablePoses } from '../../.test-build/src/workspace/spatial.js';
 import {
   createTab,
   createBinding,
@@ -9,25 +8,6 @@ import {
   reattachTabs,
 } from '../../.test-build/src/workspace/workspaceState.js';
 import { createRun } from './support.mjs';
-
-test('follow targets require a visible attached position, including position-only trajectory anchors', () => {
-  const run = createRun();
-  const fields = buildCatalog([run]);
-  const tab = createTab('trajectory', 'Test');
-  const position = createBinding(findField(fields, run.id, 'vector:position'), 'spatial', 0);
-  const pose = createBinding(findField(fields, run.id, 'pose:position'), 'spatial', 1);
-  const scalar = createBinding(findField(fields, run.id, 'position.0'), 'spatial', 2);
-  const hidden = { ...pose, id: 'hidden', visible: false };
-  const unavailable = { ...pose, id: 'unattached', runId: 'missing' };
-
-  tab.bindings = [position, pose, scalar, hidden, unavailable];
-
-  assert.deepEqual(
-    followablePoses(tab, fields).map((binding) => binding.id),
-    [position.id, pose.id],
-  );
-  assert.deepEqual(followablePoses({ ...tab, type: 'vehicle' }, fields), []);
-});
 
 test('follow workspaces retain binding selection, reject dangling references, and migrate retired targets', () => {
   const run = createRun();

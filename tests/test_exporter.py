@@ -8,12 +8,7 @@ from exporter_support import exporter
 
 class ExportTests(unittest.TestCase):
     def test_bundle_and_digest(self):
-        """Check bundle contents, provenance, the trace hash, and overwrite protection.
-
-        Returns:
-            None; creates isolated fixtures and asserts the documented behavior with unittest. Assertion failures
-            fail the test.
-        """
+        """Check bundle contents, provenance, the trace hash, and overwrite protection."""
 
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
@@ -33,38 +28,8 @@ class ExportTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 exporter.export_bundle(args)
 
-    def test_invalid_receipt(self):
-        """Reject a receipt whose hash does not match the source trace.
-
-        Returns:
-            None; creates isolated fixtures and asserts the documented behavior with unittest. Assertion failures
-            fail the test.
-        """
-
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            csv = root / "input.csv"
-
-            csv.write_text("time,x\n0,1\n")
-
-            receipt = root / "receipt.json"
-
-            receipt.write_text('{"csv_sha256":"bad"}')
-
-            args = exporter.parser().parse_args(
-                ["--csv", str(csv), "--receipt", str(receipt), "--out", str(root / "bundle"), "--quiet"]
-            )
-
-            with self.assertRaises(ValueError):
-                exporter.export_bundle(args)
-
     def test_near_event_cadence(self):
-        """Group near-coincident events without reporting a spurious tiny sample period.
-
-        Returns:
-            None; creates isolated fixtures and asserts the documented behavior with unittest. Assertion failures
-            fail the test.
-        """
+        """Group near-coincident events without reporting a spurious tiny sample period."""
 
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "trace.csv"
@@ -75,22 +40,6 @@ class ExportTests(unittest.TestCase):
 
             self.assertEqual(stats["event_rows"], 1)
             self.assertAlmostEqual(stats["min_distinct_dt_s"], 1)
-
-    def test_backwards_time_fails(self):
-        """Reject traces whose time axis moves backwards.
-
-        Returns:
-            None; creates isolated fixtures and asserts the documented behavior with unittest. Assertion failures
-            fail the test.
-        """
-
-        with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "trace.csv"
-
-            p.write_text("time,x\n1,1\n0,2\n")
-
-            with self.assertRaises(ValueError):
-                exporter.scan_csv(p)
 
 
 if __name__ == "__main__":

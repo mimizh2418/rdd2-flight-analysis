@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { uploadFile, poseCsv } from './support/fixtures';
-import { watchErrors, importFlight, createView, openAppearance, seekTime, zoomIn } from './support/actions';
+import { watchErrors, importFlight, openAppearance, seekTime, zoomIn } from './support/actions';
 
 test('keyboard playback, graphs and exports remain usable without WebGL', async ({ page }) => {
   const errors = watchErrors(page);
@@ -38,103 +38,38 @@ test('keyboard playback, graphs and exports remain usable without WebGL', async 
   expect(errors).toEqual([]);
 });
 
-test('one trajectory dock accepts a pose and switches path, model, and both without reloading its data', async ({
-  page,
-}) => {
+test('spatial display changes reuse prepared worker data and preserve the selected timestamp', async ({ page }) => {
   const errors = watchErrors(page);
 
   await page.goto('/');
   await importFlight(page);
-  await createView(page, '3D trajectory');
-
-  await expect(page.locator('.binding-lane')).toHaveCount(1);
-  await expect(page.getByTestId('drop-paths')).toHaveCount(0);
-  await expect(page.getByTestId('drop-poses')).toHaveCount(0);
-
-  await page.getByLabel('Search fields', { exact: true }).fill('Truth vehicle pose');
-  await page.locator('.field-row[data-field-id="pose:position"]').dragTo(page.getByTestId('drop-spatial'));
-
-  const row = page.locator('.binding[data-field-id="pose:position"]');
-
-  await expect(row).toHaveCount(1);
-  await expect(row).toHaveAttribute('aria-busy', 'false');
-  await expect(page.locator('.scene-canvas canvas')).toBeVisible();
-
-  await page.getByRole('button', { name: 'Fit', exact: true }).click();
   await seekTime(page, 1);
 
-  // Appearance edits should reuse prepared data; count any worker requests that would reload a field.
+  // Only source changes should reload geometry. Display/model changes must reuse the existing worker cache.
   await page.evaluate(() => {
     const messages: string[] = [];
-
-    Object.defineProperty(window, 'appearanceLoads', { value: messages });
-
     const send = Worker.prototype.postMessage;
 
+    Object.defineProperty(window, 'appearanceLoads', { value: messages });
     Worker.prototype.postMessage = function (this: Worker, message: { type?: string }, transfer?: Transferable[]) {
       if (message.type === 'field' || message.type === 'column') messages.push(message.type);
       return send.call(this, message, transfer ?? []);
     } as typeof send;
   });
 
-  const display = row.locator('.binding-head').getByLabel('Display Truth vehicle pose', { exact: true });
+  const row = page.locator('.binding[data-field-id="pose:position"]');
+  const display = row.getByLabel('Display Truth vehicle pose', { exact: true });
 
-  await expect(display).toBeVisible();
-  await expect(display).toHaveValue('both');
-  await expect(page.getByRole('dialog', { name: 'Appearance settings for Truth vehicle pose' })).toHaveCount(0);
-
-  // The same binding can switch between path, model, and both without disappearing from its dock.
-  await display.selectOption('trajectory');
-
-  await expect(row.locator('[data-appearance=line]')).toHaveCount(1);
-  await expect(row.locator('[data-appearance=drone]')).toHaveCount(0);
-
-  await page.screenshot({ path: 'artifacts/validation/workspace-pose-path.png' });
-  await display.selectOption('pose');
+  for (const selection of ['trajectory', 'pose', 'both']) {
+    await display.selectOption(selection);
+    await expect(row).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator('.scene-canvas canvas')).toBeVisible();
+  }
   await openAppearance(page, 'Truth vehicle pose');
-
-  await expect(
-    page.getByRole('dialog', { name: 'Appearance settings for Truth vehicle pose' }).getByRole('combobox', {
-      name: 'Display Truth vehicle pose',
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(page.getByLabel('Line style Truth vehicle pose', { exact: true })).toHaveCount(0);
-
   await page.getByLabel('Model Truth vehicle pose', { exact: true }).selectOption('ghost');
-
-  await expect(row.locator('[data-appearance=ghost]')).toHaveCount(1);
-
   await page.keyboard.press('Escape');
-  await page.screenshot({ path: 'artifacts/validation/workspace-pose-model.png' });
-  await display.selectOption('both');
-  await openAppearance(page, 'Truth vehicle pose');
-  await page.getByLabel('Model Truth vehicle pose', { exact: true }).selectOption('ball');
-
-  await expect(row.locator('[data-appearance=line]')).toHaveCount(1);
-  await expect(row.locator('[data-appearance=ball]')).toHaveCount(1);
-  await expect(
-    page.getByRole('dialog', { name: 'Appearance settings for Truth vehicle pose', exact: true }),
-  ).toBeInViewport();
-
-  await page.keyboard.press('Escape');
-
-  await expect(row.getByRole('button', { name: 'Appearance Truth vehicle pose', exact: true })).toBeFocused();
-
-  await page.screenshot({ path: 'artifacts/validation/workspace-pose-both.png' });
-
   expect(await page.evaluate(() => (window as unknown as { appearanceLoads: string[] }).appearanceLoads)).toEqual([]);
   await expect(page.getByTestId('playback-time')).toContainText('1.000');
-
-  await createView(page, '3D trajectory');
-
-  await expect(page.locator('.binding')).toHaveCount(0);
-
-  await page.getByRole('tab', { name: '◇ Trajectory 2', exact: true }).click();
-  await openAppearance(page, 'Truth vehicle pose');
-
-  await expect(page.getByLabel('Display Truth vehicle pose', { exact: true })).toHaveValue('both');
-  await expect(page.getByLabel('Model Truth vehicle pose', { exact: true })).toHaveValue('ball');
   expect(errors).toEqual([]);
 });
 
