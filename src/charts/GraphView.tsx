@@ -3,7 +3,7 @@ import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import type { Run } from '../data/types';
 import { usePlayback } from '../playback/PlaybackProvider';
-import { findField } from '../workspace/fieldCatalog';
+import { findField, graphSignalIds } from '../workspace/fieldCatalog';
 import type { PreparationService } from '../workspace/PreparationService';
 import { indexedPlot, type GraphIndex } from '../workspace/graphIndex';
 import type { Field, PlotSeries, ViewTab } from '../workspace/types';
@@ -27,10 +27,7 @@ export function graphSeries(tab: ViewTab, fields: Field[], runs: Run[], offsets:
 
       if (!field || !run || !Number.isFinite(offset)) return [];
 
-      const ids =
-        field.type === 'orientation'
-          ? [0, 1, 2].map((axis) => `${field.prefix === 'estimate.q' ? 'estimate.rpy' : 'rpy'}.${axis}`)
-          : field.signals;
+      const ids = graphSignalIds(field);
 
       return ids
         .filter((id) => !!run.signals[id])

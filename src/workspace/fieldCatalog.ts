@@ -261,6 +261,22 @@ export function findField(fields: Field[], runId: string, fieldId: string): Fiel
 }
 
 /**
+ * Resolve the scalar channels plotted for any field, including aggregate lists.
+ * @param field Scalar or aggregate descriptor referencing existing telemetry.
+ * @returns Signal IDs in plot order; orientation uses roll/pitch/yaw rather than quaternion components.
+ * @remarks Treat the returned list as read-only. Source values are neither copied nor transformed here.
+ */
+export function graphSignalIds(field: Field): string[] {
+  if (field.type === 'orientation') {
+    const prefix = field.prefix === 'estimate.q' ? 'estimate.rpy' : 'rpy';
+
+    return [0, 1, 2].map((axis) => `${prefix}.${axis}`);
+  }
+
+  return field.signals;
+}
+
+/**
  * Determine whether a field can be dropped into a particular view lane.
  * @param field Source descriptor.
  * @param type Active view type.

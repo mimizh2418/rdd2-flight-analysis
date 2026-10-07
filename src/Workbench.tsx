@@ -13,7 +13,7 @@ import { DroneIcon } from './components/DroneIcon';
 import { SimulationPanel } from './components/SimulationPanel';
 import { WorkspaceScene } from './scene/WorkspaceScene';
 import { GraphView } from './charts/GraphView';
-import { buildCatalog, findField } from './workspace/fieldCatalog';
+import { buildCatalog, findField, graphSignalIds } from './workspace/fieldCatalog';
 import {
   createBinding,
   createTab,
@@ -208,7 +208,7 @@ export function Workbench({
    *
    * @param field Catalog descriptor referencing immutable source columns.
    * @param lane Typed destination lane in the active tab.
-   * @returns Nothing; queues one field, or separate scalar components for a vector added to a graph.
+   * @returns Nothing; queues one field, or separate scalar components for any list added to a graph.
    */
   const addField = (field: Field, lane: Lane) => {
     if (!tab) return;
@@ -220,18 +220,20 @@ export function Workbench({
       return;
     }
 
-    if (tab.type === 'graph' && ['position', 'velocity', 'pose', 'vector'].includes(field.type)) {
+    const signalIds = graphSignalIds(field);
+
+    if (tab.type === 'graph' && signalIds.length > 1) {
       // Resolve all components from the same run before adding anything. Each row references existing columns.
-      const components = field.signals
+      const components = signalIds
         .map((signal) => findField(fields, field.runId, signal))
         .filter((component): component is Field => component?.type === 'scalar');
 
-      if (components.length !== field.signals.length) {
-        setError('The vector components are unavailable; reimport its source log.');
+      if (components.length !== signalIds.length) {
+        setError('The field components are unavailable; reimport its source log.');
         return;
       }
 
-      // Advance the palette for every component so the three lines have distinct, independently editable colors.
+      // Advance the palette for every component; each line gets its own color and appearance controls.
       const bindings = components.map((component, index) =>
         createBinding(component, lane, tab.bindings.length + index),
       );
