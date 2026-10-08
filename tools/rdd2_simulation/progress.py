@@ -27,7 +27,7 @@ class Progress:
     def message(self, text: str) -> None:
         """Flush one status line to stderr; stdout remains the bundle-path channel."""
         if not self.quiet:
-            print(f"[rdd2-export] {text}", file=sys.stderr, flush=True)
+            print(f"[rdd2-simulate] {text}", file=sys.stderr, flush=True)
 
     def update(self, text: str, *, force: bool = False) -> None:
         """Emit row/byte progress at most once a second, or immediately when forced."""

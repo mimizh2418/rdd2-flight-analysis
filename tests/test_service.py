@@ -33,7 +33,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.request("GET", f"/api/jobs/{ident}/manifest.json")[0], 404)
 
     def setUp(self):
-        """Start an isolated loopback service with a temporary scenario and missing compiler.
+        """Start an isolated loopback service with a temporary invalid scenario.
 
         Returns:
             None; stores a temporary fixture, job queue, ephemeral-port HTTP server, and background server thread on
@@ -48,7 +48,7 @@ class ServiceTests(unittest.TestCase):
         scenario.write_text("[sim]\nt_end = 0.02\n")
 
         self.scenario = str(scenario.relative_to(self.root))
-        self.jobs = service.Jobs(self.root, self.root / "jobs", str(self.root / "missing-rumoca"))
+        self.jobs = service.Jobs(self.root, self.root / "jobs")
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), service.handler(self.jobs, {"http://127.0.0.1:5173"}))
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
@@ -165,6 +165,6 @@ class ServiceTests(unittest.TestCase):
             time.sleep(0.01)
 
         self.assertEqual(job["state"], "failed")
-        self.assertIn("Export failed", job["error"])
+        self.assertIn("Simulation failed", job["error"])
         self.assertNotIn("process", job)
         self.assertEqual(self.request("GET", f"/api/jobs/{ident}/trace.csv")[0], 409)

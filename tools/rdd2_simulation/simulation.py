@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import importlib.metadata
 from pathlib import Path
-import shutil
-import subprocess
 import tomllib
 
 from .arrow_io import prepare_arrow
@@ -20,18 +18,16 @@ def simulate(
     scenario: Path,
     root: Path,
     output: Path,
-    rumoca: str,
     stop_time: float | None,
     progress: Progress,
-    output_format: str = "csv",
+    output_format: str = "arrow",
 ) -> tuple[dict, TraceSummary]:
-    """Validate and simulate with matching Rumoca CLI/Python versions, then export selected signals.
+    """Load a scenario with the bundled Rumoca compiler, simulate, and export selected signals.
 
     Args:
-        scenario: Scenario TOML passed to the Rumoca public Python API and CLI check.
-        root: Modelica checkout used as the CLI working directory and for source identity.
+        scenario: Scenario TOML validated and compiled by the Rumoca public Python API.
+        root: Modelica checkout used for source identity.
         output: Staging destination used when output_format is csv.
-        rumoca: CLI executable name or path; must match the installed Python package version.
         stop_time: Optional positive final time in seconds, overriding scenario t_end.
         progress: Reporter shared with bundle packaging to collect separate stage timings.
         output_format: arrow retains numeric buffers for later publication; csv writes a staged trace.
@@ -39,25 +35,26 @@ def simulate(
         (provenance, trace), including compiler identity, solver settings, native runtime metrics when available,
         and validated trace metadata. simulation_wall_time_s measures only the model.simulate call.
     Raises:
-        RuntimeError: CLI/Python versions differ or source inputs change during simulation.
-        subprocess.CalledProcessError: CLI version/check fails.
+        RuntimeError: Simulation dependencies are missing or source inputs change during simulation.
     Notes:
         Simulation/API/file errors propagate. Unknown termination is recorded honestly. Generated samples are
         validated while writing; packaging does not reread them. Elapsed-time heartbeats are not solver callbacks.
     """
 
-    with progress.stage("scenario_validation", "Checking Rumoca versions and scenario"):
-        version = subprocess.run([rumoca, "--version"], check=True, capture_output=True, text=True).stdout.strip()
-        subprocess.run(
-            [rumoca, "sim", "check", "-c", str(scenario)], cwd=root, check=True, capture_output=True, text=True
-        )
-
-        import rumoca as rum
+    with progress.stage("runtime_setup", "Loading the Rumoca Python compiler"):
+        try:
+            import rumoca as rum
+        except ImportError as error:
+            raise RuntimeError(
+                "Scenario simulation requires the simulation extra: "
+                "uv run --locked --extra simulation tools/rdd2_simulate.py run SCENARIO --out DIRECTORY; "
+                f"Rumoca import failed: {error}"
+            ) from error
 
         python_version = importlib.metadata.version("rumoca")
-
-        if python_version not in version:
-            raise RuntimeError(f"CLI/Python version mismatch: {version!r} vs {python_version!r}")
+        native_version = rum.version()
+        # Identify the native library actually used by this Python process, rather than another executable.
+        native_extension = Path(rum._native.__file__).resolve()
 
     config_source = tomllib.loads(scenario.read_text())
     duration = stop_time if stop_time is not None else float(config_source.get("sim", {}).get("t_end", 45))
@@ -104,10 +101,8 @@ def simulate(
         if identity_before["source_sha256"] != identity_after["source_sha256"]:
             raise RuntimeError("Model inputs changed during simulation; refusing misleading provenance")
 
-    binary = Path(shutil.which(rumoca) or rumoca).resolve()
-
-    with progress.stage("compiler_hash", "Fingerprinting the Rumoca executable"):
-        binary_hash = sha256(binary)
+    with progress.stage("compiler_hash", "Fingerprinting the Rumoca native extension"):
+        native_hash = sha256(native_extension)
 
     return {
         **identity_before,
@@ -115,9 +110,10 @@ def simulate(
         "scenario": scenario.name,
         "compiler": {
             "name": "Rumoca",
-            "cli_version": version,
             "python_version": python_version,
-            "binary_sha256": binary_hash,
+            "native_version": native_version,
+            "native_extension": str(native_extension),
+            "native_extension_sha256": native_hash,
             "python_module": str(Path(rum.__file__).resolve()),
         },
         "solver": {**config_source.get("sim", {}), "t_end": duration},

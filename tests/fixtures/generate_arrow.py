@@ -3,7 +3,6 @@
 Run from the repository root with: uv run --locked tests/fixtures/generate_arrow.py.
 """
 
-import importlib.util
 import math
 from pathlib import Path
 import sys
@@ -12,10 +11,9 @@ import pyarrow as pa
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-SPEC = importlib.util.spec_from_file_location("fixture_exporter", ROOT / "tools/export_rdd2_viewer.py")
-exporter = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = exporter
-SPEC.loader.exec_module(exporter)
+from rdd2_simulation.arrow_io import prepare_arrow, write_arrow
+from rdd2_simulation.metadata import SCHEMA, signal_catalog
+from rdd2_simulation.progress import Progress
 
 names = ["time", "x_m", "y_m", "z_m", "roll_rad", "pitch_rad", "yaw_rad"]
 columns = [
@@ -27,20 +25,20 @@ columns = [
     [0] * 5,
     [0, 0, 0, 0.5, 1],
 ]
-trace = exporter.prepare_arrow(names, columns)
+trace = prepare_arrow(names, columns)
 manifest = {
-    "schema": "rdd2-viewer-v1",
+    "schema": SCHEMA,
     "name": "Python Arrow flight",
     "world_frame": "ENU",
     "body_frame": "FLU",
     "quaternion_order": "wxyz",
-    "signals": exporter.signal_catalog(names),
+    "signals": signal_catalog(names),
     "observed": trace.observed,
     "mission": {"waypoints": [[0, 0, 1], [4, 0, 1]]},
     "compiler": {"name": "interoperability fixture"},
 }
 output = Path(__file__).with_name("python-flight.arrow")
-exporter.write_arrow(output, trace.table, manifest, exporter.Progress(quiet=True))
+write_arrow(output, trace.table, manifest, Progress(quiet=True))
 # Keep the fixture small while exercising event groups split across record batches.
 table = pa.ipc.open_file(output).read_all()
 with pa.OSFile(str(output), "wb") as stream, pa.ipc.new_file(stream, table.schema) as writer:

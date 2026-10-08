@@ -17,7 +17,7 @@ def arrow_modules():
     except ImportError as error:
         raise RuntimeError(
             "Arrow export requires the project dependencies: uv sync --locked; "
-            "run with uv run --locked tools/export_rdd2_viewer.py, or use --format csv"
+            "run with uv run --locked tools/rdd2_simulate.py, or use --format csv"
         ) from error
     return np, pa
 

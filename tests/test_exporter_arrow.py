@@ -90,7 +90,7 @@ class ArrowTests(unittest.TestCase):
             root = Path(directory)
             source = root / "input.csv"
             source.write_text('time,"covariance[1,2]"\n0,\n1,nan\n2,inf\n')
-            args = exporter.parser().parse_args(["--csv", str(source), "--out", str(root / "out"), "--quiet"])
+            args = exporter.parser().parse_args(["convert-csv", str(source), "--out", str(root / "out"), "--quiet"])
             output = exporter.export_bundle(args)
             self.assertEqual([file.name for file in output.iterdir()], ["trace.arrow"])
             table = pa.ipc.open_file(output / "trace.arrow").read_all()

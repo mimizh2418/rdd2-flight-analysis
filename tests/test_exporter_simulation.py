@@ -4,7 +4,6 @@ from contextlib import ExitStack
 import hashlib
 import json
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -49,26 +48,28 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(manifest["simulation_wall_time_s"], 5.0)
         self.assertEqual(manifest["coverage_status"], "partial")
         self.assertEqual(manifest["compiler"]["python_version"], "0.10.0")
+        self.assertEqual(manifest["compiler"]["native_version"], "0.10.0")
+        self.assertEqual(manifest["compiler"]["native_extension_sha256"], exporter.sha256(self.native_extension))
+        self.assertNotIn("cli_version", manifest["compiler"])
+        self.assertNotIn("binary_sha256", manifest["compiler"])
 
     def setUp(self):
-        """Create a scenario and matching fake CLI/Python runtimes, with a deterministic stage clock."""
+        """Create a Python runtime stub and reject external processes, with a deterministic stage clock."""
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.scenario = self.root / "scenario.toml"
         self.scenario.write_text('[model]\nname = "RDD2"\n[sim]\nt_end = 2\nsolver = "auto"\n')
-        self.binary = self.root / "rumoca"
-        self.binary.write_bytes(b"test compiler")
+        self.native_extension = self.root / "_native.abi3.so"
+        self.native_extension.write_bytes(b"test native compiler")
         self.args = exporter.parser().parse_args(
             [
+                "run",
+                str(self.scenario),
                 "--format",
                 "csv",
-                "--scenario",
-                str(self.scenario),
                 "--modelica-root",
                 str(self.root),
-                "--rumoca",
-                str(self.binary),
                 "--out",
                 str(self.root / "bundle"),
                 "--quiet",
@@ -79,13 +80,18 @@ class SimulationTests(unittest.TestCase):
         self.model.simulate.side_effect = self.simulate
         self.session = Mock()
         self.session.from_scenario.return_value = (object(), self.model, {"runtime": "config"})
-        runtime = SimpleNamespace(Session=self.session, __file__=str(self.root / "rumoca.py"))
+        runtime = SimpleNamespace(
+            Session=self.session,
+            version=lambda: "0.10.0",
+            _native=SimpleNamespace(__file__=str(self.native_extension)),
+            __file__=str(self.root / "rumoca.py"),
+        )
         patches = ExitStack()
         self.addCleanup(patches.close)
         patches.enter_context(patch.dict(sys.modules, rumoca=runtime))
         patches.enter_context(patch.object(simulation.importlib.metadata, "version", return_value="0.10.0"))
         patches.enter_context(
-            patch.object(simulation.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "rumoca 0.10.0"))
+            patch("subprocess.run", side_effect=AssertionError("Simulation must not invoke the Rumoca CLI"))
         )
         patches.enter_context(patch.object(progress.time, "perf_counter", side_effect=lambda: self.clock))
         self.identity = patches.enter_context(
@@ -111,7 +117,7 @@ class SimulationTests(unittest.TestCase):
 
         def compiler_hash_only(path):
             """Allow provenance hashing, but reject a redundant generated-CSV hash read."""
-            self.assertEqual(path, self.binary)
+            self.assertEqual(path, self.native_extension)
 
             return original_hash(path)
 

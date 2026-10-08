@@ -89,7 +89,7 @@ def export_bundle(args) -> Path:
             if not scenario.is_relative_to(root):
                 raise ValueError("Scenario must be inside the supplied modelica_models checkout")
 
-            provenance, trace = simulate(scenario, root, csv_path, args.rumoca, args.stop_time, progress, output_format)
+            provenance, trace = simulate(scenario, root, csv_path, args.stop_time, progress, output_format)
 
         manifest = {
             "schema": SCHEMA,
@@ -141,7 +141,7 @@ def export_bundle(args) -> Path:
     size = (out / artifact.name).stat().st_size / 1024**2
     elapsed = time.perf_counter() - progress.started
     progress.message(
-        f"Bundle ready: {observed['rows']:,} rows, {len(trace.names) - 1:,} signals, "
+        f"Log ready: {observed['rows']:,} rows, {len(trace.names) - 1:,} signals, "
         f"{observed['start_time_s']:g}–{observed['end_time_s']:g} s, {size:.1f} MiB. Total: {elapsed:.2f} s."
     )
 

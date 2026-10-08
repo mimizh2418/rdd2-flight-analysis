@@ -69,10 +69,10 @@ class CsvTests(unittest.TestCase):
             receipt_path.write_text(json.dumps(receipt))
             args = exporter.parser().parse_args(
                 [
+                    "convert-csv",
+                    str(source),
                     "--format",
                     "csv",
-                    "--csv",
-                    str(source),
                     "--receipt",
                     str(receipt_path),
                     "--out",
@@ -100,7 +100,7 @@ class CsvTests(unittest.TestCase):
             source = root / "input.csv"
             source.write_text("time,x\n1,2\n0,3\n")
             args = exporter.parser().parse_args(
-                ["--format", "csv", "--csv", str(source), "--out", str(root / "bundle"), "--quiet"]
+                ["convert-csv", str(source), "--format", "csv", "--out", str(root / "bundle"), "--quiet"]
             )
 
             with self.assertRaises(ValueError):

@@ -36,29 +36,29 @@ Coordinates use East-North-Up (world) and Forward-Left-Up (body). Thrust is a co
 ## Generating logs (optional)
 
 Existing logs need no Python environment. For Python tooling, install [uv](https://docs.astral.sh/uv/getting-started/installation/).
-It manages Python, creates `.venv`, and installs dependencies from `uv.lock`; activation is unnecessary.
-`uv run --locked` prepares the environment automatically when running a command.
+The npm shortcuts use uv to manage Python and install locked dependencies in `.venv`; activation is unnecessary.
 
-To convert an existing CSV to Arrow:
-
-```sh
-uv run --locked tools/export_rdd2_viewer.py --csv existing.csv --out exports/flight
-```
-
-To simulate, install the **Rumoca 0.10.2 CLI** and check out `modelica_models` beside this repository.
-The `simulation` extra installs matching Python bindings:
+To simulate, check out `modelica_models` beside this repository. The `simulation` extra installs
+Rumoca 0.10.2 with its bundled compiler and solver; no separate Rumoca CLI is needed:
 
 ```sh
-uv run --locked --extra simulation tools/export_rdd2_viewer.py \
-  --scenario ../modelica_models/Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml \
+npm run simulate -- \
+  ../modelica_models/Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml \
   --out exports/rdd2
 ```
 
 Import the resulting `trace.arrow`; its metadata is embedded, so no sidecar is needed. Add `--format csv` to produce
-`trace.csv` and `manifest.json` instead. See `--help` for checkout locations, receipts, and mission geometry.
+`trace.csv` and `manifest.json` instead. Use `npm run simulate -- --help` for simulation settings and mission geometry.
 
-The exporter reports stages, elapsed time, and write progress on stderr; `--quiet` suppresses these messages.
+To convert an existing CSV without running a simulation, use the secondary command:
+
+```sh
+npm run convert:csv -- existing.csv --out exports/flight
+```
+
+The tool reports stages, elapsed time, and write progress on stderr; `--quiet` suppresses these messages.
 Metadata records model-loading and simulation timings; final write/publication timings appear on stderr.
+Simulation provenance records the Rumoca package/native versions and the native extension's SHA-256.
 Stdout contains the final output directory.
 
 For batch simulations from the app, run `npm run service` and connect **Simulation** to `http://127.0.0.1:8765`.
@@ -90,23 +90,23 @@ React/TypeScript, Three.js, and uPlot power the frontend. Start with [Workbench]
 [data](src/data/) for log handling, [math](src/math/) for diagnostics, and [workers](src/workers/) for data preparation.
 Keep full-resolution data for analysis and exports; decimate only for display.
 
-The Python exporter lives in [tools/rdd2_exporter](tools/rdd2_exporter/); the existing script remains its CLI entry point.
-See [the Arrow format contract](docs/arrow-format.md) for schema, metadata, and interoperability details.
+The Python simulation tool starts at [tools/rdd2_simulate.py](tools/rdd2_simulate.py), with simulation, serialization,
+and provenance modules in [tools/rdd2_simulation](tools/rdd2_simulation/).
 
 ```sh
 npm run format
 npm run format:check
-uv run --locked black tools tests
+npm run format:python
+npm run format:python:check
 ```
 
-Prettier and Black target 120-character lines; add `--check` to the Black command to validate.
+Prettier and Black target 120-character lines.
 Python dependencies live in `pyproject.toml` and `uv.lock`; `.python-version` selects Python 3.11 by default.
 Use `uv add` / `uv add --dev` to change dependencies and include the updated `uv.lock` in the same commit.
 Use `uv lock --upgrade-package <package>` for a compatible dependency update, or edit an exact pin with `uv add`.
-To install the locked development environment explicitly or regenerate the Python-to-JavaScript test fixture:
+The npm commands prepare the Python environment automatically. To regenerate the Python-to-JavaScript test fixture:
 
 ```sh
-uv sync --locked
 uv run --locked tests/fixtures/generate_arrow.py
 ```
 
