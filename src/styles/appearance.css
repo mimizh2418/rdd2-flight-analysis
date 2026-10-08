@@ -1,0 +1,77 @@
+/* Field appearance popover and reusable color presets. */
+
+.appearance-popover {
+  position: fixed;
+  z-index: 40;
+  width: min(320px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 6px 18px #0004;
+  font-size: 12px;
+}
+
+.appearance-title {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 12px;
+  overflow-wrap: anywhere;
+}
+
+.appearance-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.appearance-controls > label {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.appearance-controls > label:has(input[type='checkbox']) {
+  justify-content: start;
+}
+
+.appearance-controls select {
+  max-width: 205px;
+}
+
+.appearance-controls input[type='number'] {
+  width: 70px;
+  padding: 3px 4px;
+}
+
+.kind-label {
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.color-presets {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 3px;
+}
+
+.color-presets .color-swatch {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+
+.color-swatch[aria-pressed='true'] {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.color-swatch:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}

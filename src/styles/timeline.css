@@ -1,0 +1,156 @@
+/* Shared time strip, tick marks, hover cursors, and transport controls. */
+
+.clock-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-height: 65px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.time-strip {
+  flex: 1;
+  height: 45px;
+  min-width: 110px;
+  position: relative;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.time-track,
+.time-fill {
+  position: absolute;
+  top: 19px;
+  height: 6px;
+  background: var(--border);
+  border-radius: 2px;
+  width: 100%;
+}
+
+.time-fill {
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.time-cursor {
+  position: absolute;
+  top: 12px;
+  bottom: 13px;
+  width: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.time-cursor span {
+  position: absolute;
+  bottom: 100%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.time-cursor.preview {
+  border-left: 1px dashed var(--preview);
+  background: transparent;
+}
+
+.time-cursor.preview span {
+  color: var(--preview);
+  background: var(--overlay);
+}
+
+.time-ticks {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 28px;
+  pointer-events: none;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.transport {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  position: relative;
+}
+
+.transport output {
+  font-size: 13px;
+  min-width: 78px;
+  text-align: right;
+  margin-right: 5px;
+}
+
+.transport .play {
+  color: var(--accent);
+  min-width: 33px;
+}
+
+.transport button {
+  padding: 5px 6px;
+}
+
+.transport select {
+  width: 62px;
+}
+
+.preview-readout {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  color: var(--warning);
+  font-size: 9px;
+  white-space: nowrap;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.time-placeholder {
+  flex: 1;
+  color: var(--muted);
+}
+
+/* Graduations retain round time spacing as the shared window zooms and pans. */
+
+.time-tick {
+  position: absolute;
+  top: 0;
+  border-left: 1px solid var(--border);
+  height: 7px;
+}
+
+.time-tick.major {
+  height: 12px;
+  border-color: var(--muted);
+}
+
+.time-tick span {
+  position: absolute;
+  top: 14px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .clock-row {
+    gap: 7px;
+    padding: 8px;
+  }
+}
+
+@media (max-width: 800px) {
+  .clock-row {
+    flex-wrap: wrap;
+  }
+  .time-strip {
+    flex: 1;
+  }
+  .transport {
+    margin-left: auto;
+  }
+}

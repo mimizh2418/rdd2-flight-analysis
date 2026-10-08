@@ -19,16 +19,17 @@ flowchart LR
 
 ## Code map
 
-| Area                                                                | Responsibility                                                                             |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [Workbench](../src/Workbench.tsx), [components](../src/components/) | Import/run controls, tabs, field browser/dock, menus, workspace and export UI              |
-| [Data](../src/data/)                                                | Decode Arrow/CSV, validate metadata, recognize signals, derive diagnostics, encode exports |
-| [Playback](../src/playback/)                                        | Event indexing, interpolation/validity, global clock, alignment, window and ticks          |
-| [Workspace](../src/workspace/)                                      | Field grouping, compatibility, persistence, preparation scheduling, graph/path indices     |
-| [Scene](../src/scene/), [charts](../src/charts/)                    | 3D models/cameras and time-series rendering                                                |
-| [Math](../src/math/)                                                | Rotations, path-distance queries, and time-weighted statistics                             |
-| [Workers](../src/workers/)                                          | Import/normalization, selected-field preparation, Arrow export and analysis                |
-| [Python modules](../tools/rdd2_simulation/)                         | Scenario execution, telemetry extraction, metadata, staged log publication                 |
+| Area                                                                | Responsibility                                                                                                                                  |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Workbench](../src/Workbench.tsx), [components](../src/components/) | Import/run controls, tabs, field browser/dock, menus, workspace and export UI                                                                   |
+| [Data](../src/data/)                                                | Decode Arrow/CSV, validate metadata, recognize signals, derive diagnostics, encode exports                                                      |
+| [Playback](../src/playback/)                                        | Event indexing, interpolation/validity, global clock, alignment, window and ticks                                                               |
+| [Workspace](../src/workspace/)                                      | Field grouping, compatibility, persistence, preparation scheduling, graph/path indices                                                          |
+| [Scene](../src/scene/), [charts](../src/charts/)                    | 3D models/cameras and time-series rendering                                                                                                     |
+| [Styles](../src/styles/), [entry point](../src/style.css)           | Shared theme tokens and defaults, followed by component styles with their responsive overrides; `theme.css` supplies colors to canvas renderers |
+| [Math](../src/math/)                                                | Rotations, path-distance queries, and time-weighted statistics                                                                                  |
+| [Workers](../src/workers/)                                          | Import/normalization, selected-field preparation, Arrow export and analysis                                                                     |
+| [Python modules](../tools/rdd2_simulation/)                         | Scenario execution, telemetry extraction, metadata, staged log publication                                                                      |
 
 ## Data and responsiveness
 

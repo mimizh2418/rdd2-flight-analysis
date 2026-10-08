@@ -1,0 +1,100 @@
+/* Shared dropdown structure and the application settings menu. */
+
+.menu {
+  position: relative;
+}
+
+.menu summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+.menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu > div {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 170px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px;
+  box-shadow: 0 6px 18px #0004;
+  display: grid;
+}
+
+.menu > div button {
+  text-align: left;
+  border: none;
+  background: transparent;
+}
+
+.menu > div button:hover {
+  background: var(--raised);
+}
+
+.view-settings > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 5px;
+  background: transparent;
+  border-color: transparent;
+}
+
+.view-settings > summary:hover,
+.view-settings[open] > summary {
+  background: var(--raised);
+}
+
+.view-settings > summary svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.view-settings > div {
+  left: auto;
+  right: 0;
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+  gap: 14px;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.view-settings fieldset {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.view-settings legend {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.settings-row {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-row select {
+  max-width: 180px;
+}

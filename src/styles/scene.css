@@ -1,0 +1,191 @@
+/* Trajectory and vehicle viewport controls, legends, and readouts. */
+
+.scene-canvas canvas {
+  display: block;
+}
+
+.scene-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.scene-toolbar > span {
+  margin-right: 8px;
+}
+
+.scene-toolbar button,
+.follow-pose-menu > summary {
+  font-size: 10px;
+  padding: 4px 7px;
+  background: var(--overlay);
+}
+
+.follow-pose-menu {
+  min-width: 0;
+  max-width: 240px;
+}
+
+.follow-pose-menu > summary,
+.follow-pose-menu > div button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.follow-pose-menu svg {
+  width: 24px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.follow-pose-menu .menu-chevron {
+  width: 10px;
+  height: 10px;
+}
+
+.follow-pose-label {
+  min-width: 0;
+}
+
+.follow-pose-menu > summary .follow-pose-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.follow-pose-menu > div {
+  left: auto;
+  right: 0;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 28px));
+  max-height: min(300px, calc(var(--scene-height, 100dvh) - 48px));
+  overflow-y: auto;
+}
+
+.follow-pose-menu > div button {
+  white-space: normal;
+}
+
+.scene-toolbar button[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.scene-key {
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.scene-key i {
+  width: 14px;
+  height: 2px;
+  margin-right: 5px;
+}
+
+.east {
+  background: #ff6363;
+}
+
+.north {
+  background: #75d767;
+}
+
+.up {
+  background: #6fa5ff;
+}
+
+.vehicle-readouts {
+  position: absolute;
+  right: 15px;
+  top: 14px;
+  width: 195px;
+  max-height: calc(100% - 25px);
+  overflow: auto;
+  display: grid;
+  gap: 9px;
+}
+
+.readout {
+  background: var(--overlay);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  border-radius: 3px;
+}
+
+.readout strong {
+  font-size: 11px;
+}
+
+.readout span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+
+.readout b {
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-weight: 400;
+}
+
+.readout small {
+  font-size: 9px;
+}
+
+.readout progress {
+  width: 100%;
+  height: 3px;
+}
+
+.webgl-fallback {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 18px;
+  z-index: 3;
+}
+
+.scene-legend {
+  position: absolute;
+  top: 47px;
+  left: 14px;
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.scene-legend i {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  margin: 0 6px 3px 0;
+}
+
+@media (max-width: 800px) {
+  .vehicle-readouts {
+    width: 160px;
+    right: 8px;
+  }
+  .scene-toolbar > span {
+    display: none;
+  }
+}

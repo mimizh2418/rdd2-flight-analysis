@@ -1,0 +1,30 @@
+/* Shared Mission Control tokens, including colors read by the canvas renderers. */
+
+:root {
+  /* Mission Control: one shared palette for the workbench, floating controls, and canvas renderers. */
+  --canvas: #0a121d;
+  --panel: #101e2d;
+  --raised: #16283a;
+  --border: #294052;
+  --grid: #192c3b;
+  --axis: #91a6bb;
+  --text: #e0ebf3;
+  --muted: #91a6bb;
+  --accent: #74dde3;
+  --accent-soft: #153841;
+  --preview: #e8b57d;
+  --warning: #f0c28e;
+  --warning-surface: #332b25;
+  --danger: #f1a7b0;
+  --danger-surface: #392831;
+  --success-surface: #132e2e;
+  --overlay: #101e2df0;
+  --scrim: #030911b3;
+  --radius: 3px;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', ui-monospace, monospace;
+  font-family: Inter, 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  color: var(--text);
+  background: var(--canvas);
+  font-synthesis: none;
+  color-scheme: dark;
+}

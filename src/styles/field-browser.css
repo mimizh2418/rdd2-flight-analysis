@@ -1,0 +1,290 @@
+/* Searchable field tree, current values, and the field add menu. */
+
+.field-browser {
+  width: var(--browser-width);
+  flex: 0 0 var(--browser-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  position: relative;
+}
+
+.browser-head {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 9px;
+}
+
+.browser-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.browser-title strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.browser-title output {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.browser-title button {
+  font-size: 19px;
+  padding: 0 3px;
+}
+
+.search {
+  width: 100%;
+}
+
+.field-list {
+  position: relative;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.field-list > .empty-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.field-group {
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.field-group-arrow {
+  display: inline-block;
+  width: 20px;
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.field-group .count {
+  margin-left: auto;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.field-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 9px;
+  border-bottom: 1px solid transparent;
+  cursor: grab;
+}
+
+.field-row:hover {
+  background: var(--raised);
+}
+
+.field-drag {
+  color: var(--muted);
+}
+
+.field-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.field-type {
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.field-current {
+  font-size: 10px;
+  text-align: right;
+  max-width: 48%;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.field-row button {
+  padding: 2px 5px;
+  color: var(--accent);
+}
+
+.browser-footer {
+  padding: 9px 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+}
+
+.field-browser.collapsed {
+  align-items: center;
+  padding-top: 12px;
+}
+
+.field-browser.collapsed button {
+  writing-mode: vertical-rl;
+  padding: 8px;
+}
+
+.add-menu {
+  position: absolute;
+  bottom: 12px;
+  left: 8px;
+  right: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  display: grid;
+  gap: 7px;
+  z-index: 10;
+  box-shadow: 0 8px 25px #0009;
+}
+
+.add-menu button {
+  text-align: left;
+}
+
+.field-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  flex: 1;
+  min-width: 35px;
+}
+
+.field-label .field-type {
+  margin-left: 6px;
+  color: var(--accent);
+  font-size: 9px;
+  display: none;
+}
+
+.field-value {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 65%;
+  padding-top: 0;
+  font-size: 9px;
+}
+
+.field-source {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.browser-foot {
+  padding: 9px 12px;
+  font-size: 9px;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.browser-add {
+  position: fixed;
+  width: 220px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px;
+  display: grid;
+  gap: 2px;
+  z-index: 40;
+  box-shadow: 0 6px 18px #0004;
+  font-size: 12px;
+}
+
+.browser-add > strong {
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-add button {
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+}
+
+.browser-add button:not(:disabled):hover {
+  background: var(--raised);
+}
+
+.browser-add button:last-child {
+  color: var(--muted);
+}
+
+.field-expand,
+.field-leaf {
+  width: 20px;
+  flex: 0 0 20px;
+  text-align: center;
+}
+
+.field-row .field-expand {
+  height: 24px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+@media (max-width: 800px) {
+  .field-browser:not(.collapsed) {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: min(300px, 75vw);
+    z-index: 15;
+    box-shadow: 12px 0 30px #0008;
+  }
+}

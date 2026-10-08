@@ -1,0 +1,82 @@
+/* Import progress, warnings, and error notifications. */
+
+.toast-stack {
+  position: fixed;
+  right: 12px;
+  bottom: 38px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(380px, calc(100vw - 24px));
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+.workbench-toast {
+  flex: 0 0 auto;
+  padding: 9px 12px 11px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--panel);
+  pointer-events: auto;
+}
+
+.toast-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast-heading strong {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.toast-heading button {
+  padding: 3px 5px;
+}
+
+.workbench-toast p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.toast-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.toast-progress progress {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+}
+
+.toast-progress span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.error-toast {
+  border-left-color: var(--danger);
+}
+
+.error-toast strong {
+  color: var(--danger);
+}
+
+.warning-toast {
+  border-left-color: var(--warning);
+}
+
+.warning-toast strong {
+  color: var(--warning);
+}

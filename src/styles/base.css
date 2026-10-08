@@ -1,0 +1,139 @@
+/* Document defaults, native controls, and shared utility classes. */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select,
+summary {
+  font: inherit;
+}
+
+button,
+select,
+input {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+
+button {
+  background: transparent;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:not(:disabled):hover,
+summary:hover {
+  background: var(--raised);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+input,
+select {
+  padding: 5px 7px;
+  min-width: 0;
+}
+
+input[type='checkbox'] {
+  accent-color: var(--accent);
+  margin: 0 5px 0 0;
+}
+
+input[type='number'] {
+  width: 65px;
+}
+
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+small {
+  color: var(--muted);
+}
+
+.flat {
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon {
+  padding: 4px 7px;
+}
+
+.mono,
+output,
+.binding-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+progress {
+  accent-color: var(--accent);
+  border: 0;
+}
+
+progress::-webkit-progress-bar {
+  background: var(--border);
+}
+
+progress::-webkit-progress-value {
+  background: var(--accent);
+}
+
+h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 6px 10px;
+  font-size: 11px;
+}
+
+dt {
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  background: var(--canvas);
+  padding: 10px;
+}
