@@ -42,9 +42,9 @@ function ImportToast({
   if (!visible) return null;
 
   return (
-    <section className="workbench-toast import-toast" aria-label="CSV import">
+    <section className="workbench-toast import-toast" aria-label="Log import">
       <div className="toast-heading">
-        <strong>{complete ? 'CSV imported' : 'Importing CSV'}</strong>
+        <strong>{complete ? 'Log imported' : 'Importing log'}</strong>
         {complete ? (
           <button className="flat icon" aria-label="Dismiss import" onClick={onDismiss}>
             ×
@@ -57,7 +57,7 @@ function ImportToast({
       </div>
       <p role="status">{progress.stage}</p>
       <div className="toast-progress">
-        <progress aria-label="CSV import progress" max={1} value={progress.fraction} />
+        <progress aria-label="Log import progress" max={1} value={progress.fraction} />
         <span className="mono">{Math.round(progress.fraction * 100)}%</span>
       </div>
     </section>

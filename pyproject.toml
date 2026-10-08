@@ -1,3 +1,23 @@
+[project]
+name = "rdd2-flight-analysis"
+version = "0.1.0"
+description = "Python log export and simulation tooling for RDD2 Flight Analysis"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy==2.4.3",
+    "pyarrow==23.0.1",
+]
+
+[project.optional-dependencies]
+simulation = ["rumoca==0.10.2"]
+
+[dependency-groups]
+dev = ["black==25.9.0"]
+
+[tool.uv]
+# Run repository scripts directly; this frontend repository is not a distributable Python package.
+package = false
+
 [tool.black]
 line-length = 120
 target-version = ["py311"]

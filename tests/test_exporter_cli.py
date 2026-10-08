@@ -11,6 +11,40 @@ from exporter_support import EXPORTER_PATH
 
 
 class CliTests(unittest.TestCase):
+    def test_csv_remains_usable_without_arrow_dependencies(self):
+        """Run with site-packages disabled; CSV works and Arrow fails with actionable stderr only."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "input.csv"
+            source.write_text("time,x\n0,1\n1,2\n")
+            for encoding in ("csv", "arrow"):
+                output = root / encoding
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-S",
+                        str(EXPORTER_PATH),
+                        "--csv",
+                        str(source),
+                        "--format",
+                        encoding,
+                        "--out",
+                        str(output),
+                        "--quiet",
+                    ],
+                    text=True,
+                    capture_output=True,
+                )
+                if encoding == "csv":
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, f"{output}\n")
+                    self.assertTrue((output / "trace.csv").is_file())
+                else:
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("uv sync --locked", result.stderr)
+                    self.assertIn("uv run --locked tools/export_rdd2_viewer.py", result.stderr)
+
     def test_scenario_check_failure_includes_rumoca_diagnostics(self):
         """Surface captured compiler errors even when CLI-check output is no longer sent to stdout."""
         with tempfile.TemporaryDirectory() as directory:
@@ -68,7 +102,8 @@ class CliTests(unittest.TestCase):
                 with self.subTest(quiet=quiet):
                     result = subprocess.run(command, check=True, text=True, capture_output=True)
                     self.assertEqual(result.stdout, f"{output}\n")
-                    self.assertTrue((output / "manifest.json").is_file())
+                    self.assertTrue((output / "trace.arrow").is_file())
+                    self.assertFalse((output / "manifest.json").exists())
 
                     if quiet:
                         self.assertEqual(result.stderr, "")

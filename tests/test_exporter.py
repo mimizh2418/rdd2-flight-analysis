@@ -16,7 +16,9 @@ class ExportTests(unittest.TestCase):
 
             csv.write_text("time_s,x_m,y_m,z_m,roll_rad,pitch_rad,yaw_rad\n0,0,0,1,0,0,0\n1,1,0,1,0,0,0\n")
 
-            args = exporter.parser().parse_args(["--csv", str(csv), "--out", str(root / "bundle"), "--quiet"])
+            args = exporter.parser().parse_args(
+                ["--format", "csv", "--csv", str(csv), "--out", str(root / "bundle"), "--quiet"]
+            )
             path = exporter.export_bundle(args)
             manifest = json.loads((path / "manifest.json").read_text())
 

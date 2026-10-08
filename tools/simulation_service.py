@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Optional loopback-only Rumoca job service; Python 3.11+, standard library only."""
+"""Optional loopback-only Rumoca job service.
+
+Run with npm run service, which selects the locked uv environment and simulation dependencies.
+"""
 
 from __future__ import annotations
 import argparse
@@ -257,15 +260,24 @@ def handler(jobs: Jobs, origins: set[str]):
                 len(parts) == 5
                 and parts[1:3] == ["api", "jobs"]
                 and parts[3] in jobs.items
-                and parts[4] in ("trace.csv", "manifest.json")
+                and parts[4] in ("trace.arrow", "trace.csv", "manifest.json")
             ):
                 if jobs.items[parts[3]]["state"] != "complete":
                     return self.send(409, {"error": "Result not complete"})
 
                 path = jobs.artifacts / parts[3] / parts[4]
 
+                if not path.is_file():
+                    return self.send(404, {"error": "Artifact not available"})
                 self.send_response(200)
-                self.send_header("Content-Type", "text/csv" if path.suffix == ".csv" else "application/json")
+                self.send_header(
+                    "Content-Type",
+                    {
+                        ".arrow": "application/vnd.apache.arrow.file",
+                        ".csv": "text/csv",
+                        ".json": "application/json",
+                    }[path.suffix],
+                )
 
                 origin = self.headers.get("Origin")
 
@@ -275,7 +287,7 @@ def handler(jobs: Jobs, origins: set[str]):
                 self.send_header("Content-Length", str(path.stat().st_size))
                 self.end_headers()
 
-                # Stream potentially large CSVs in bounded blocks instead of building one response body.
+                # Stream potentially large traces in bounded blocks instead of building one response body.
                 with path.open("rb") as stream:
                     for block in iter(lambda: stream.read(1024 * 1024), b""):
                         self.wfile.write(block)

@@ -15,6 +15,23 @@ SPEC.loader.exec_module(service)
 
 
 class ServiceTests(unittest.TestCase):
+    def test_completed_arrow_artifact_streams_without_a_manifest(self):
+        """Serve binary bytes with the Arrow MIME type, and report an absent CSV sidecar as 404."""
+        ident = "arrow-result"
+        self.jobs.items[ident] = {"id": ident, "state": "complete"}
+        directory = self.jobs.artifacts / ident
+        directory.mkdir(parents=True)
+        payload = (Path(__file__).parent / "fixtures/python-flight.arrow").read_bytes()
+        (directory / "trace.arrow").write_bytes(payload)
+        connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        connection.request("GET", f"/api/jobs/{ident}/trace.arrow")
+        response = connection.getresponse()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader("Content-Type"), "application/vnd.apache.arrow.file")
+        self.assertEqual(response.read(), payload)
+        connection.close()
+        self.assertEqual(self.request("GET", f"/api/jobs/{ident}/manifest.json")[0], 404)
+
     def setUp(self):
         """Start an isolated loopback service with a temporary scenario and missing compiler.
 
