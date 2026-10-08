@@ -11,7 +11,7 @@ export interface ImportStatus {
 }
 
 /**
- * Import local CSV/manifest batches in workers, publishing only fully successful batches.
+ * Import local Arrow and CSV/manifest batches in workers, publishing only fully successful batches.
  * @param onComplete Receives new runs after all selected files have passed parsing and hash verification.
  * @param onError Reports recoverable errors without replacing existing data.
  * @returns File loader, cancellation action, and current batch progress.
@@ -45,19 +45,20 @@ export function useRunImport(onComplete: (runs: Run[]) => void, onError: (error:
 
   /**
    * Parse selected files in order and pair manifests by their declared CSV filename.
-   * @param files CSVs and optional manifests from the file picker, drop, or simulation service.
+   * @param files Arrow files, CSVs and optional CSV manifests from the file picker, drop, or simulation service.
    * @returns Promise resolving after success, cancellation, or a reported recoverable failure.
    */
   const load = async (files: File[]) => {
     cancel();
     const batch = token.current;
     try {
-      const csvs = files.filter((file) => /\.csv$/i.test(file.name));
+      const traces = files.filter((file) => /\.(arrow|csv)$/i.test(file.name));
+      const csvs = traces.filter((file) => /\.csv$/i.test(file.name));
 
-      if (!csvs.length) throw new Error('Select a CSV, optionally together with its manifest.json.');
+      if (!traces.length) throw new Error('Select an Arrow file or a CSV with an optional manifest.json.');
 
       // Start one stable notification before any asynchronous reads; quick batches need not display it.
-      setStatus({ id: batch, phase: 'loading', fraction: 0, stage: `${csvs[0].name}: Preparing import` });
+      setStatus({ id: batch, phase: 'loading', fraction: 0, stage: `${traces[0].name}: Preparing import` });
 
       const manifests: Manifest[] = [];
 
@@ -67,14 +68,16 @@ export function useRunImport(onComplete: (runs: Run[]) => void, onError: (error:
 
       const imported: Run[] = [];
 
-      for (const file of csvs) {
+      for (const file of traces) {
         if (batch !== token.current) return;
 
-        const manifest =
-          manifests.find((item) => item.csv === file.name) ??
-          (csvs.length === 1 && manifests.length === 1 ? manifests[0] : undefined);
+        const manifest = /\.arrow$/i.test(file.name)
+          ? undefined
+          : (manifests.find((item) => item.csv === file.name) ??
+            (csvs.length === 1 && manifests.length === 1 ? manifests[0] : undefined));
 
-        if (manifests.length && !manifest) throw new Error(`No matching manifest for ${file.name}.`);
+        if (/\.csv$/i.test(file.name) && manifests.length && !manifest)
+          throw new Error(`No matching manifest for ${file.name}.`);
 
         const run = await new Promise<Run>((resolve, reject) => {
           const worker = new Worker(new URL('../workers/import.worker.ts', import.meta.url), { type: 'module' });
@@ -125,7 +128,7 @@ export function useRunImport(onComplete: (runs: Run[]) => void, onError: (error:
           id: batch,
           phase: 'complete',
           fraction: 1,
-          stage: csvs.map((file) => file.name).join(', '),
+          stage: traces.map((file) => file.name).join(', '),
         });
         // Source removals and tab edits made during the import must survive its eventual publication.
         callbacks.current.onComplete(imported);

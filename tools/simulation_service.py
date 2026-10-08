@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Optional loopback-only Rumoca job service; Python 3.11+, standard library only."""
+"""Optional loopback-only Rumoca job service.
+
+Run with npm run service, which selects the locked uv environment and simulation dependencies.
+"""
 
 from __future__ import annotations
 import argparse
@@ -18,19 +21,18 @@ import uuid
 class Jobs:
     """Serialize simulations while allowing HTTP threads to inspect and cancel jobs safely."""
 
-    def __init__(self, root: Path, artifacts: Path, rumoca: str):
+    def __init__(self, root: Path, artifacts: Path):
         """Discover allowed scenarios and initialize a queue that runs one simulation at a time.
 
         Args:
             root: Modelica checkout containing Vehicles/Rdd2/Test scenario files.
             artifacts: Directory for per-job bundles and exporter logs.
-            rumoca: CLI executable name/path forwarded to the exporter.
         Notes:
             Discovers allowed scenarios once, resolves directory paths, and creates a single-worker executor. The
             service owner must shut down the executor.
         """
 
-        self.root, self.artifacts, self.rumoca = root.resolve(), artifacts.resolve(), rumoca
+        self.root, self.artifacts = root.resolve(), artifacts.resolve()
         self.scenarios = {
             str(p.relative_to(self.root)): p
             for p in sorted((self.root / "Vehicles/Rdd2/Test").glob("rumoca-scenario.*.toml"))
@@ -84,15 +86,13 @@ class Jobs:
             output = self.artifacts / ident
             cmd = [
                 sys.executable,
-                str(Path(__file__).with_name("export_rdd2_viewer.py")),
+                str(Path(__file__).with_name("rdd2_simulate.py")),
+                "run",
+                str(self.scenarios[job["scenario"]]),
                 "--modelica-root",
                 str(self.root),
-                "--scenario",
-                str(self.scenarios[job["scenario"]]),
                 "--out",
                 str(output),
-                "--rumoca",
-                self.rumoca,
             ]
 
             self.artifacts.mkdir(parents=True, exist_ok=True)
@@ -257,15 +257,24 @@ def handler(jobs: Jobs, origins: set[str]):
                 len(parts) == 5
                 and parts[1:3] == ["api", "jobs"]
                 and parts[3] in jobs.items
-                and parts[4] in ("trace.csv", "manifest.json")
+                and parts[4] in ("trace.arrow", "trace.csv", "manifest.json")
             ):
                 if jobs.items[parts[3]]["state"] != "complete":
                     return self.send(409, {"error": "Result not complete"})
 
                 path = jobs.artifacts / parts[3] / parts[4]
 
+                if not path.is_file():
+                    return self.send(404, {"error": "Artifact not available"})
                 self.send_response(200)
-                self.send_header("Content-Type", "text/csv" if path.suffix == ".csv" else "application/json")
+                self.send_header(
+                    "Content-Type",
+                    {
+                        ".arrow": "application/vnd.apache.arrow.file",
+                        ".csv": "text/csv",
+                        ".json": "application/json",
+                    }[path.suffix],
+                )
 
                 origin = self.headers.get("Origin")
 
@@ -275,7 +284,7 @@ def handler(jobs: Jobs, origins: set[str]):
                 self.send_header("Content-Length", str(path.stat().st_size))
                 self.end_headers()
 
-                # Stream potentially large CSVs in bounded blocks instead of building one response body.
+                # Stream potentially large traces in bounded blocks instead of building one response body.
                 with path.open("rb") as stream:
                     for block in iter(lambda: stream.read(1024 * 1024), b""):
                         self.wfile.write(block)
@@ -351,7 +360,6 @@ def main():
     p.add_argument("--modelica-root", type=Path, default=Path("../modelica_models"))
     p.add_argument("--artifacts", type=Path, default=Path("artifacts/jobs"))
     p.add_argument("--port", type=int, default=8765)
-    p.add_argument("--rumoca", default=os.environ.get("MODELICA_MODELS_RUMOCA", "rumoca"))
     p.add_argument(
         "--origin",
         action="append",
@@ -359,7 +367,7 @@ def main():
     )
 
     args = p.parse_args()
-    jobs = Jobs(args.modelica_root, args.artifacts, args.rumoca)
+    jobs = Jobs(args.modelica_root, args.artifacts)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler(jobs, set(args.origin)))
 
     print(f"RDD2 simulation service: http://127.0.0.1:{args.port}", flush=True)

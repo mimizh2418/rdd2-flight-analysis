@@ -4,14 +4,13 @@ from contextlib import ExitStack
 import hashlib
 import json
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from exporter_support import exporter
+from exporter_support import exporter, bundle, progress, simulation
 
 
 class ResultStub:
@@ -31,23 +30,46 @@ class ResultStub:
 
 
 class SimulationTests(unittest.TestCase):
+    def test_arrow_simulation_does_not_serialize_csv(self):
+        """Write native numeric results straight to IPC, carrying provenance inside the file."""
+        import pyarrow as pa
+
+        self.args.format = "arrow"
+        with (
+            patch.object(simulation, "write_trace", side_effect=AssertionError("No intermediate CSV")),
+            patch.object(bundle, "scan_csv", side_effect=AssertionError("No CSV scan")),
+        ):
+            output = exporter.export_bundle(self.args)
+        self.assertEqual([file.name for file in output.iterdir()], ["trace.arrow"])
+        table = pa.ipc.open_file(output / "trace.arrow").read_all()
+        self.assertEqual(table["time"].to_pylist(), ResultStub.time)
+        self.assertEqual(table["position_m[1]"].to_pylist(), [0.0, 2.0, 3.0])
+        manifest = json.loads(table.schema.metadata[b"rdd2:manifest"])
+        self.assertEqual(manifest["simulation_wall_time_s"], 5.0)
+        self.assertEqual(manifest["coverage_status"], "partial")
+        self.assertEqual(manifest["compiler"]["python_version"], "0.10.0")
+        self.assertEqual(manifest["compiler"]["native_version"], "0.10.0")
+        self.assertEqual(manifest["compiler"]["native_extension_sha256"], exporter.sha256(self.native_extension))
+        self.assertNotIn("cli_version", manifest["compiler"])
+        self.assertNotIn("binary_sha256", manifest["compiler"])
+
     def setUp(self):
-        """Create a scenario and matching fake CLI/Python runtimes, with a deterministic stage clock."""
+        """Create a Python runtime stub and reject external processes, with a deterministic stage clock."""
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.scenario = self.root / "scenario.toml"
         self.scenario.write_text('[model]\nname = "RDD2"\n[sim]\nt_end = 2\nsolver = "auto"\n')
-        self.binary = self.root / "rumoca"
-        self.binary.write_bytes(b"test compiler")
+        self.native_extension = self.root / "_native.abi3.so"
+        self.native_extension.write_bytes(b"test native compiler")
         self.args = exporter.parser().parse_args(
             [
-                "--scenario",
+                "run",
                 str(self.scenario),
+                "--format",
+                "csv",
                 "--modelica-root",
                 str(self.root),
-                "--rumoca",
-                str(self.binary),
                 "--out",
                 str(self.root / "bundle"),
                 "--quiet",
@@ -58,17 +80,22 @@ class SimulationTests(unittest.TestCase):
         self.model.simulate.side_effect = self.simulate
         self.session = Mock()
         self.session.from_scenario.return_value = (object(), self.model, {"runtime": "config"})
-        runtime = SimpleNamespace(Session=self.session, __file__=str(self.root / "rumoca.py"))
+        runtime = SimpleNamespace(
+            Session=self.session,
+            version=lambda: "0.10.0",
+            _native=SimpleNamespace(__file__=str(self.native_extension)),
+            __file__=str(self.root / "rumoca.py"),
+        )
         patches = ExitStack()
         self.addCleanup(patches.close)
         patches.enter_context(patch.dict(sys.modules, rumoca=runtime))
-        patches.enter_context(patch.object(exporter.importlib.metadata, "version", return_value="0.10.0"))
+        patches.enter_context(patch.object(simulation.importlib.metadata, "version", return_value="0.10.0"))
         patches.enter_context(
-            patch.object(exporter.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "rumoca 0.10.0"))
+            patch("subprocess.run", side_effect=AssertionError("Simulation must not invoke the Rumoca CLI"))
         )
-        patches.enter_context(patch.object(exporter.time, "perf_counter", side_effect=lambda: self.clock))
+        patches.enter_context(patch.object(progress.time, "perf_counter", side_effect=lambda: self.clock))
         self.identity = patches.enter_context(
-            patch.object(exporter, "source_identity", return_value={"source_sha256": "unchanged"})
+            patch.object(simulation, "source_identity", return_value={"source_sha256": "unchanged"})
         )
 
     def simulate(self, **kwargs):
@@ -90,14 +117,14 @@ class SimulationTests(unittest.TestCase):
 
         def compiler_hash_only(path):
             """Allow provenance hashing, but reject a redundant generated-CSV hash read."""
-            self.assertEqual(path, self.binary)
+            self.assertEqual(path, self.native_extension)
 
             return original_hash(path)
 
         with (
-            patch.object(exporter, "write_trace", side_effect=slow_write),
-            patch.object(exporter, "scan_csv", side_effect=AssertionError("Generated CSV must not be rescanned")),
-            patch.object(exporter, "sha256", side_effect=compiler_hash_only),
+            patch.object(simulation, "write_trace", side_effect=slow_write),
+            patch.object(bundle, "scan_csv", side_effect=AssertionError("Generated CSV must not be rescanned")),
+            patch.object(simulation, "sha256", side_effect=compiler_hash_only),
         ):
             output = exporter.export_bundle(self.args)
 

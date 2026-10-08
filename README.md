@@ -4,14 +4,14 @@ A browser application for replaying and comparing RDD2 drone simulations from
 [modelica_models](https://github.com/CogniPilot/modelica_models) and
 [Rumoca](https://github.com/CogniPilot/rumoca). Logs are processed locally in your browser.
 
-Built with AI slop because I don't have time to do it properly
+Built with AI slop because I don't have time to do it properly.
 
 ## Features
 
 - **3D replay:** compare trajectories and poses, or inspect a centered vehicle's attitude, velocity, and motor effort.
 - **Telemetry graphs:** configurable signals and styles, dual Y axes, zoom, and automatic scaling.
 - **Diagnostics:** tracking errors, path deviation, and estimator uncertainty when the necessary channels are present.
-- **Comparison and export:** synchronized logs and tabs, event alignment, saved workspaces, and CSV/statistics export.
+- **Comparison and export:** synchronized logs and tabs, event alignment, saved workspaces, and Arrow/CSV/statistics export.
 - **Live simulation (planned):** run RDD2 simulations in-browser with Rumoca WebAssembly, live 3D/telemetry updates,
   and recording for later analysis. Rumoca and `modelica_models` will be pinned and packaged through Nix.
 
@@ -24,9 +24,9 @@ npm ci
 npm run dev
 ```
 
-Import a CSV with a `time` or `time_s` column in seconds. RDD2 channels are recognized automatically;
-other numeric columns remain available as raw signals. Import a matching `manifest.json` alongside the CSV for
-hash verification, simulation metadata, and planned geometry when included.
+Import a `.arrow` log with embedded simulation metadata and mission geometry. CSV remains supported with a `time`
+or `time_s` column in seconds and an optional matching `manifest.json` for hash verification and provenance.
+RDD2 channels are recognized automatically; other numeric columns remain available as raw signals.
 
 Shift-drag pans graphs. Paused hover previews data without seeking. Saved workspaces contain settings;
 reimport the original logs to restore their data.
@@ -35,20 +35,31 @@ Coordinates use East-North-Up (world) and Forward-Left-Up (body). Thrust is a co
 
 ## Generating logs (optional)
 
-Existing logs need no simulator. To generate a bundle, install **Python 3.11+** and matching Rumoca CLI/Python versions.
-With `modelica_models` checked out beside this repository:
+Existing logs need no Python environment. For Python tooling, install [uv](https://docs.astral.sh/uv/getting-started/installation/).
+The npm shortcuts use uv to manage Python and install locked dependencies in `.venv`; activation is unnecessary.
+
+To simulate, check out `modelica_models` beside this repository. The `simulation` extra installs
+Rumoca 0.10.2 with its bundled compiler and solver; no separate Rumoca CLI is needed:
 
 ```sh
-python3 tools/export_rdd2_viewer.py \
-  --scenario ../modelica_models/Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml \
+npm run simulate -- \
+  ../modelica_models/Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml \
   --out exports/rdd2
 ```
 
-Import the resulting `trace.csv` and `manifest.json`. Use `--modelica-root` for a different checkout location;
-see `python3 tools/export_rdd2_viewer.py --help` for bundling existing CSVs or attaching mission geometry.
+Import the resulting `trace.arrow`; its metadata is embedded, so no sidecar is needed. Add `--format csv` to produce
+`trace.csv` and `manifest.json` instead. Use `npm run simulate -- --help` for simulation settings and mission geometry.
 
-The exporter reports stages, elapsed time, and CSV progress on stderr; `--quiet` suppresses these messages.
-The manifest records separate model-loading, simulation, and export timings. Stdout contains the final bundle path.
+To convert an existing CSV without running a simulation, use the secondary command:
+
+```sh
+npm run convert:csv -- existing.csv --out exports/flight
+```
+
+The tool reports stages, elapsed time, and write progress on stderr; `--quiet` suppresses these messages.
+Metadata records model-loading and simulation timings; final write/publication timings appear on stderr.
+Simulation provenance records the Rumoca package/native versions and the native extension's SHA-256.
+Stdout contains the final output directory.
 
 For batch simulations from the app, run `npm run service` and connect **Simulation** to `http://127.0.0.1:8765`.
 
@@ -57,7 +68,7 @@ For batch simulations from the app, run `npm run service` and connect **Simulati
 ```sh
 npm run build                         # Type-check and build into dist/
 npm test                              # Data and numerical tests
-npm run test:python                   # Python 3.11+; Rumoca not required
+npm run test:python                   # uv installs the Python environment; Rumoca not required
 npx playwright install chromium       # One-time browser setup
 RDD2_PREVIEW=1 npm run test:browser    # Browser tests against the production build
 ```
@@ -76,16 +87,29 @@ the two simulation-artifact tests skip until their log fixtures are supplied.
 ## Development
 
 React/TypeScript, Three.js, and uPlot power the frontend. Start with [Workbench](src/Workbench.tsx) for UI,
-[data](src/data/) for CSV handling, [math](src/math/) for diagnostics, and [workers](src/workers/) for data preparation.
+[data](src/data/) for log handling, [math](src/math/) for diagnostics, and [workers](src/workers/) for data preparation.
 Keep full-resolution data for analysis and exports; decimate only for display.
+
+The Python simulation tool starts at [tools/rdd2_simulate.py](tools/rdd2_simulate.py), with simulation, serialization,
+and provenance modules in [tools/rdd2_simulation](tools/rdd2_simulation/).
 
 ```sh
 npm run format
 npm run format:check
-uv tool run --from black==25.9.0 black tools tests
+npm run format:python
+npm run format:python:check
 ```
 
-Prettier and Black target 120-character lines; add `--check` to the Black command to validate.
-Profile imports with `npm run benchmark -- /path/to/trace.csv`.
+Prettier and Black target 120-character lines.
+Python dependencies live in `pyproject.toml` and `uv.lock`; `.python-version` selects Python 3.11 by default.
+Use `uv add` / `uv add --dev` to change dependencies and include the updated `uv.lock` in the same commit.
+Use `uv lock --upgrade-package <package>` for a compatible dependency update, or edit an exact pin with `uv add`.
+The npm commands prepare the Python environment automatically. To regenerate the Python-to-JavaScript test fixture:
+
+```sh
+uv run --locked tests/fixtures/generate_arrow.py
+```
+
+Profile imports with `npm run benchmark -- /path/to/trace.arrow` (CSV also supported).
 
 Licensed under [MIT](LICENSE).

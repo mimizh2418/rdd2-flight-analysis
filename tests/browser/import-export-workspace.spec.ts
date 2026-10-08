@@ -121,7 +121,7 @@ test('import toasts suppress quick flashes and retain stable, cancellable feedba
       document.querySelector('.import-toast');
   });
   await expect(page.locator('.run-title')).toHaveText('pose.csv');
-  await expect(page.locator('.import-toast')).toContainText('CSV imported');
+  await expect(page.locator('.import-toast')).toContainText('Log imported');
   expect(
     await page.evaluate(
       () =>

@@ -1,25 +1,27 @@
 import { compile } from './test.mjs';
-import { createReadStream, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 
 // Use the same parser and normalizer as the viewer, separating their timings from source transpilation.
 compile();
-const { CsvReader, ColumnBuilder } = await import('../.test-build/src/data/csv.js');
+const { parseBuffer } = await import('../.test-build/src/data/csv.js');
+const { decodeArrow } = await import('../.test-build/src/data/arrow.js');
 const { normalizeRun } = await import('../.test-build/src/data/normalize.js');
 const { summarize } = await import('../.test-build/src/math/statistics.js');
 const path = process.argv[2];
 if (!path) {
-  throw new Error('Usage: npm run benchmark -- /path/to/trace.csv');
+  throw new Error('Usage: npm run benchmark -- /path/to/trace.arrow (or trace.csv)');
 }
 const before = performance.now();
-const b = new ColumnBuilder();
-const r = new CsvReader(b.row);
-for await (const chunk of createReadStream(path, { encoding: 'utf8', highWaterMark: 1024 * 1024 })) {
-  r.feed(chunk);
-}
-r.feed('', true);
+const bytes = readFileSync(path);
+const { columns, manifest } = /\.arrow$/i.test(path)
+  ? decodeArrow(bytes)
+  : {
+      columns: parseBuffer(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
+      manifest: undefined,
+    };
 const parsed = performance.now();
-const run = normalizeRun(b.finish(), path, undefined, statSync(path).size);
+const run = normalizeRun(columns, path, manifest, statSync(path).size);
 const done = performance.now();
 const summary = summarize(run, 'tracking.norm', run.time[0], run.time.at(-1));
 // Memory is a process snapshot after import, rather than an assertion about peak browser memory.

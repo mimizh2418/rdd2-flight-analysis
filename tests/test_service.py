@@ -15,8 +15,25 @@ SPEC.loader.exec_module(service)
 
 
 class ServiceTests(unittest.TestCase):
+    def test_completed_arrow_artifact_streams_without_a_manifest(self):
+        """Serve binary bytes with the Arrow MIME type, and report an absent CSV sidecar as 404."""
+        ident = "arrow-result"
+        self.jobs.items[ident] = {"id": ident, "state": "complete"}
+        directory = self.jobs.artifacts / ident
+        directory.mkdir(parents=True)
+        payload = (Path(__file__).parent / "fixtures/python-flight.arrow").read_bytes()
+        (directory / "trace.arrow").write_bytes(payload)
+        connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        connection.request("GET", f"/api/jobs/{ident}/trace.arrow")
+        response = connection.getresponse()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader("Content-Type"), "application/vnd.apache.arrow.file")
+        self.assertEqual(response.read(), payload)
+        connection.close()
+        self.assertEqual(self.request("GET", f"/api/jobs/{ident}/manifest.json")[0], 404)
+
     def setUp(self):
-        """Start an isolated loopback service with a temporary scenario and missing compiler.
+        """Start an isolated loopback service with a temporary invalid scenario.
 
         Returns:
             None; stores a temporary fixture, job queue, ephemeral-port HTTP server, and background server thread on
@@ -31,7 +48,7 @@ class ServiceTests(unittest.TestCase):
         scenario.write_text("[sim]\nt_end = 0.02\n")
 
         self.scenario = str(scenario.relative_to(self.root))
-        self.jobs = service.Jobs(self.root, self.root / "jobs", str(self.root / "missing-rumoca"))
+        self.jobs = service.Jobs(self.root, self.root / "jobs")
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), service.handler(self.jobs, {"http://127.0.0.1:5173"}))
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
@@ -148,6 +165,6 @@ class ServiceTests(unittest.TestCase):
             time.sleep(0.01)
 
         self.assertEqual(job["state"], "failed")
-        self.assertIn("Export failed", job["error"])
+        self.assertIn("Simulation failed", job["error"])
         self.assertNotIn("process", job)
         self.assertEqual(self.request("GET", f"/api/jobs/{ident}/trace.csv")[0], 409)

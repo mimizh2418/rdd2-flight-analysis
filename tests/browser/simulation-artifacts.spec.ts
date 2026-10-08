@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { watchErrors, addField, createView, seekTime } from './support/actions';
 
 test('large GPS trace loads fields asynchronously with progress and cancellation', async ({ page }) => {
@@ -85,7 +86,13 @@ test('fresh Rumoca export verifies and renders trajectory and centered vehicle',
 
   const root = resolve(process.env.RDD2_RUMOCA_BUNDLE!);
 
-  await page.getByTestId('trace-input').setInputFiles([resolve(root, 'trace.csv'), resolve(root, 'manifest.json')]);
+  await page
+    .getByTestId('trace-input')
+    .setInputFiles(
+      existsSync(resolve(root, 'trace.arrow'))
+        ? [resolve(root, 'trace.arrow')]
+        : [resolve(root, 'trace.csv'), resolve(root, 'manifest.json')],
+    );
 
   await expect(page.locator('.run-title')).toHaveText('rumoca-scenario.waypoint-global');
   await expect(page.locator('.scene-canvas canvas')).toBeVisible();

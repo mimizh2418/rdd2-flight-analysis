@@ -12,13 +12,18 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node tools/test.mjs",
     "test:browser": "playwright test",
-    "test:python": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "test:python": "uv run --locked python -m unittest discover -s tests -p 'test_*.py'",
     "benchmark": "node tools/benchmark.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "service": "python3 tools/simulation_service.py"
+    "format:python": "uv run --locked black tools tests",
+    "format:python:check": "uv run --locked black --check tools tests",
+    "service": "uv run --locked --extra simulation python tools/simulation_service.py",
+    "simulate": "uv run --locked --extra simulation python tools/rdd2_simulate.py run",
+    "convert:csv": "uv run --locked python tools/rdd2_simulate.py convert-csv"
   },
   "dependencies": {
+    "apache-arrow": "21.2.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "three": "0.180.0",

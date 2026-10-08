@@ -147,12 +147,12 @@ export function initialTabs(run: Run | undefined, fields: Field[]): ViewTab[] {
 }
 
 /**
- * Derive a reattachment identity without claiming simulator provenance for plain CSVs.
+ * Derive file-content identity independently of the log's simulation provenance.
  * @param run Imported source run.
  * @returns Content hash for imported files, or an empty string when provenance has no content digest.
  */
 export function fingerprint(run: Run): string {
-  return run.csvHash ?? run.manifest?.csv_sha256 ?? '';
+  return run.fileHash ?? run.csvHash ?? run.manifest?.csv_sha256 ?? '';
 }
 
 /**

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import type { Run, Summary } from './data/types';
-import { download, exportCsv } from './data/export';
+import { download, exportArrow, exportCsv } from './data/export';
 import { useRunImport } from './data/useRunImport';
 import { usePlayback } from './playback/PlaybackProvider';
 import { TimeStrip, TransportControls } from './components/TimeStrip';
@@ -186,7 +186,7 @@ export function Workbench({
     const next = [...runs, ...batch];
     const saved = document();
 
-    // Reattachment uses CSV content. Untouched starter tabs receive useful defaults only after a log arrives.
+    // Reattachment uses file content. Untouched starter tabs receive useful defaults only after a log arrives.
     sourceIdentities.current = saved.runs;
     setTabs((current) => {
       const rebound = reattachTabs({ ...saved, tabs: current }, next);
@@ -492,7 +492,7 @@ export function Workbench({
         playback.setWindow(restored.window);
         pendingRestore.current = undefined;
       }
-      setNotice('Workspace loaded. Reattach missing source files by importing their original CSVs.');
+      setNotice('Workspace loaded. Reattach missing source files by importing their original logs.');
     } catch (failure) {
       reportError(failure instanceof Error ? failure.message : String(failure));
     }
@@ -501,10 +501,10 @@ export function Workbench({
   /**
    * Export the independent analysis interval using raw rows or worker-computed full-resolution statistics.
    *
-   * @param statistics Export full-resolution statistics when true; otherwise export original CSV rows.
+   * @param statistics Export full-resolution statistics when true; otherwise export original rows.
    * @returns Promise after a completed/cancelled save or displayed failure; restores the export button state.
    */
-  const exportSelection = async (statistics = false) => {
+  const exportSelection = async (statistics = false, format: 'arrow' | 'csv' = 'arrow') => {
     if (!selectedRun || !service || !Number.isFinite(offset)) return;
     setExporting(true);
     try {
@@ -524,7 +524,7 @@ export function Workbench({
                   tracking: result,
                   p95_method: 'Time-weighted interval midpoints',
                   provenance: selectedRun.manifest ?? null,
-                  csv_sha256: fingerprint(selectedRun),
+                  file_sha256: fingerprint(selectedRun),
                   display_interval: interval,
                   alignment: playback.alignment,
                   alignment_offset_s: offset,
@@ -544,7 +544,7 @@ export function Workbench({
         const ids = [...new Set(exportAll ? selectedRun.raw : selected)];
 
         if (!ids.length) throw new Error('This tab has no fields from the selected export run.');
-        await exportCsv(selectedRun, ids, simulationInterval);
+        await (format === 'arrow' ? exportArrow : exportCsv)(selectedRun, ids, simulationInterval);
       }
     } catch (failure) {
       if (!(failure instanceof DOMException && failure.name === 'AbortError')) reportError(String(failure));
@@ -617,7 +617,7 @@ export function Workbench({
           ref={csvInput}
           data-testid="trace-input"
           type="file"
-          accept=".csv,.json"
+          accept=".arrow,.csv,.json"
           multiple
           hidden
           onChange={(event) => {
@@ -899,7 +899,7 @@ export function Workbench({
                     </div>
                     <dl>
                       <dt>Model</dt>
-                      <dd>{run.manifest?.model ?? 'Unknown (plain CSV)'}</dd>
+                      <dd>{run.manifest?.model ?? 'Unknown (no provenance)'}</dd>
                       <dt>Rows / playback samples</dt>
                       <dd>
                         {run.time.length.toLocaleString()} / {run.index.length.toLocaleString()}
@@ -911,7 +911,7 @@ export function Workbench({
                       </dd>
                       <dt>Termination</dt>
                       <dd>{JSON.stringify(run.manifest?.termination ?? 'Unknown')}</dd>
-                      <dt>CSV SHA-256</dt>
+                      <dt>File SHA-256</dt>
                       <dd className="hash">{fingerprint(run)}</dd>
                       <dt>Import</dt>
                       <dd>
@@ -935,7 +935,7 @@ export function Workbench({
                 {sourceIdentities.current
                   .filter((source) => !runs.some((run) => fingerprint(run) === source.fingerprint))
                   .map((source) => (
-                    <p key={source.id}>Missing: {source.name} · reimport matching CSV content to reattach fields.</p>
+                    <p key={source.id}>Missing: {source.name} · reimport matching file content to reattach fields.</p>
                   ))}
               </div>
             )}
@@ -986,7 +986,7 @@ export function Workbench({
                   </label>
                   <button onClick={() => setInterval([...playback.window])}>Use visible range</button>
                 </div>
-                <p>Interval is independent of time zoom. CSV retains original timestamps and event rows.</p>
+                <p>Interval is independent of time zoom. Exports retain original timestamps and event rows.</p>
                 <label>
                   <input type="checkbox" checked={exportAll} onChange={(event) => setExportAll(event.target.checked)} />
                   All original source channels (uncheck for this tab's selected fields)
@@ -995,6 +995,12 @@ export function Workbench({
                   <button
                     disabled={exporting || !selectedRun || !Number.isFinite(offset)}
                     onClick={() => void exportSelection()}
+                  >
+                    Export selection Arrow
+                  </button>
+                  <button
+                    disabled={exporting || !selectedRun || !Number.isFinite(offset)}
+                    onClick={() => void exportSelection(false, 'csv')}
                   >
                     Export selection CSV
                   </button>

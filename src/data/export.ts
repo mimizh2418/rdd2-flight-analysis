@@ -1,4 +1,4 @@
-import type { Run } from './types';
+import type { Columns, Manifest, Run } from './types';
 
 /**
  * Download a local artifact and release its temporary object URL.
@@ -89,4 +89,55 @@ export async function exportCsv(run: Run, ids: string[], interval: [number, numb
     await writer?.abort?.();
     throw error;
   }
+}
+
+/**
+ * Export a self-contained Arrow selection with embedded provenance and signal annotations.
+ * @param run Source simulation, retained intact throughout export.
+ * @param ids Channels to include, in output order.
+ * @param interval Inclusive original simulation seconds; duplicate event rows are preserved.
+ * @returns Resolves after the worker finishes and the file download begins; errors reject for UI reporting.
+ */
+export async function exportArrow(run: Run, ids: string[], interval: [number, number]): Promise<void> {
+  const columns: Columns = { time_s: run.time.slice() };
+  const signals: NonNullable<Manifest['signals']> = {};
+
+  // Snapshot each source once, yielding between columns; transfer these copies without detaching live telemetry.
+  for (const id of ids) {
+    const signal = run.signals[id];
+    columns[id] = signal.values.slice();
+    signals[id] = {
+      label: signal.label,
+      unit: signal.unit,
+      frame: signal.frame,
+      kind: signal.kind,
+      ...(signal.validity && ids.includes(signal.validity) ? { validity: signal.validity } : {}),
+    };
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  const manifest: Manifest = {
+    ...run.manifest,
+    schema: 'rdd2-viewer-v1',
+    name: run.name,
+    signals,
+    selection: { interval, source_file_sha256: run.fileHash ?? run.csvHash },
+  };
+
+  const bytes = await new Promise<Uint8Array<ArrayBuffer>>((resolve, reject) => {
+    const worker = new Worker(new URL('../workers/export.worker.ts', import.meta.url), { type: 'module' });
+    worker.onmessage = (event) => {
+      worker.terminate();
+      if (event.data.error) reject(new Error(event.data.error));
+      else resolve(event.data.bytes);
+    };
+    worker.onerror = (event) => {
+      worker.terminate();
+      reject(new Error(event.message));
+    };
+    worker.postMessage(
+      { columns, manifest, interval },
+      Object.values(columns).map((values) => values.buffer),
+    );
+  });
+  download('rdd2-selection.arrow', new Blob([bytes], { type: 'application/vnd.apache.arrow.file' }));
 }

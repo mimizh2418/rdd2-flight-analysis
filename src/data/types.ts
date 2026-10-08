@@ -66,8 +66,12 @@ export interface Run {
 
   /** SHA-256 of the imported CSV for workspace reattachment, independent of simulation provenance. */
   csvHash?: string;
+  /** SHA-256 of the imported file, independent of format and simulation provenance. */
+  fileHash?: string;
+  /** Source encoding; absent for legacy in-memory fixtures. */
+  format?: 'arrow' | 'csv';
 
-  /** Original simulation seconds for every raw CSV row, including near-coincident event rows. */
+  /** Original simulation seconds for every raw source row, including near-coincident event rows. */
   time: Float64Array;
 
   /** Raw-row indices of the final sample in each event group; this is not a separate time array. */
@@ -76,7 +80,7 @@ export interface Run {
   /** Raw source channels, canonical aliases, and calculated diagnostics keyed by signal ID. */
   signals: Record<string, Signal>;
 
-  /** Original source IDs used for full-resolution CSV export. */
+  /** Original source IDs used for full-resolution log export. */
   raw: string[];
   warnings: string[];
   manifest?: Manifest;
@@ -96,7 +100,7 @@ export interface Run {
   pathApproximation?: string;
 }
 
-/** Numeric source columns keyed by CSV header; all arrays must have the same raw-row length. */
+/** Numeric source columns keyed by original field name; all arrays have the same raw-row length. */
 export type Columns = Record<string, Float64Array>;
 
 /** Interval statistics; unavailable numerical metrics use NaN rather than fabricated zero values. */

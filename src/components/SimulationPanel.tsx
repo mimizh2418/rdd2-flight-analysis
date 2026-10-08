@@ -11,7 +11,7 @@ interface Job {
  * Connect the optional loopback simulation service and import completed job bundles.
  *
  * @param props Component properties.
- * @param props.load Callback receiving a completed job's trace.csv and manifest.json as local File objects.
+ * @param props.load Callback receiving a completed job's Arrow file or legacy CSV bundle as local File objects.
  * @returns React service controls with connection, scenario, job status, cancellation, and result-import actions.
  * @remarks Polling starts after connection and stops on cleanup; request failures appear in the panel.
  */
@@ -118,7 +118,7 @@ export function SimulationPanel({ load }: { load: (files: File[]) => void }) {
   };
 
   /**
-   * Fetch a completed job's CSV and manifest, then pass both files to the standard importer.
+   * Fetch a completed job's Arrow file (or legacy CSV bundle), then pass the files to the standard importer.
    *
    * @param id Completed service job ID used in the API URL.
    * @returns Promise resolving after invoking load or displaying a handled fetch error; does not wait for the parent
@@ -126,6 +126,13 @@ export function SimulationPanel({ load }: { load: (files: File[]) => void }) {
    */
   const open = async (id: string) => {
     try {
+      const arrow = await fetch(`${base}/api/jobs/${id}/trace.arrow`);
+      if (arrow.ok) {
+        load([new File([await arrow.blob()], 'trace.arrow')]);
+        return;
+      }
+      // Older services and completed CSV jobs still expose the original two-file bundle.
+      if (arrow.status !== 404) throw new Error(await arrow.text());
       const csv = await (await request(`/api/jobs/${id}/trace.csv`)).blob();
       const manifest = await (await request(`/api/jobs/${id}/manifest.json`)).blob();
 

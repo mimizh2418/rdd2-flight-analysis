@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from exporter_support import exporter
+from exporter_support import exporter, provenance
 
 
 class CsvTests(unittest.TestCase):
@@ -68,11 +68,21 @@ class CsvTests(unittest.TestCase):
             receipt_path = root / "receipt.json"
             receipt_path.write_text(json.dumps(receipt))
             args = exporter.parser().parse_args(
-                ["--csv", str(source), "--receipt", str(receipt_path), "--out", str(root / "bundle"), "--quiet"]
+                [
+                    "convert-csv",
+                    str(source),
+                    "--format",
+                    "csv",
+                    "--receipt",
+                    str(receipt_path),
+                    "--out",
+                    str(root / "bundle"),
+                    "--quiet",
+                ]
             )
 
             # Imported bytes are fingerprinted during the copy, without a second full-file hash read.
-            with patch.object(exporter, "sha256", side_effect=AssertionError("Unexpected CSV reread")):
+            with patch.object(provenance, "sha256", side_effect=AssertionError("Unexpected CSV reread")):
                 output = exporter.export_bundle(args)
 
             manifest = json.loads((output / "manifest.json").read_text())
@@ -89,7 +99,9 @@ class CsvTests(unittest.TestCase):
             root = Path(directory)
             source = root / "input.csv"
             source.write_text("time,x\n1,2\n0,3\n")
-            args = exporter.parser().parse_args(["--csv", str(source), "--out", str(root / "bundle"), "--quiet"])
+            args = exporter.parser().parse_args(
+                ["convert-csv", str(source), "--format", "csv", "--out", str(root / "bundle"), "--quiet"]
+            )
 
             with self.assertRaises(ValueError):
                 exporter.export_bundle(args)
