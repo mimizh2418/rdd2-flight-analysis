@@ -33,6 +33,9 @@ reimport the original logs to restore their data.
 
 Coordinates use East-North-Up (world) and Forward-Left-Up (body). Thrust is a collective command, not measured rotor thrust.
 
+See the [documentation](docs/README.md) for view controls, playback/workspaces, diagnostics, and the
+[Arrow log format](docs/arrow-format.md).
+
 ## Generating logs (optional)
 
 Existing logs need no Python environment. For Python tooling, install [uv](https://docs.astral.sh/uv/getting-started/installation/).
