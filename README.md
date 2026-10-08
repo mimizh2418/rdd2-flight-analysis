@@ -13,16 +13,24 @@ Built with AI slop because I don't have time to do it properly.
 - **Diagnostics:** tracking errors, path deviation, and estimator uncertainty when the necessary channels are present.
 - **Comparison and export:** synchronized logs and tabs, event alignment, saved workspaces, and Arrow/CSV/statistics export.
 - **Live simulation (planned):** run RDD2 simulations in-browser with Rumoca WebAssembly, live 3D/telemetry updates,
-  and recording for later analysis. Rumoca and `modelica_models` will be pinned and packaged through Nix.
+  and recording for later analysis.
 
 ## Getting started
 
-Requires **Node.js 22.12+** and npm. The 3D views also require WebGL.
+Install [Nix](https://nixos.org/download/) with `nix-command` and `flakes` enabled, then run from the repository root:
 
 ```sh
-npm ci
-npm run dev
+nix develop
+rdd2-install
+rdd2-dev
 ```
+
+Nix supplies pinned Node.js/npm, Python, uv, development tools, and `modelica_models` at
+`ea5c4750b271392d4940e8619751b112f9669ee3`. uv manages Python dependencies in `.venv-nix`;
+a separate model checkout is unnecessary. The 3D views require WebGL.
+
+All `rdd2-*` commands below assume this shell and the repository root.
+See [Nix tooling](docs/nix.md) for the full shortcut list, platform details, and [setup without Nix](docs/nix.md#without-nix).
 
 Import a `.arrow` log with embedded simulation metadata and mission geometry. CSV remains supported with a `time`
 or `time_s` column in seconds and an optional matching `manifest.json` for hash verification and provenance.
@@ -38,25 +46,19 @@ See the [documentation](docs/README.md) for view controls, playback/workspaces, 
 
 ## Generating logs (optional)
 
-Existing logs need no Python environment. For Python tooling, install [uv](https://docs.astral.sh/uv/getting-started/installation/).
-The npm shortcuts use uv to manage Python and install locked dependencies in `.venv`; activation is unnecessary.
-
-To simulate, check out `modelica_models` beside this repository. The `simulation` extra installs
-Rumoca 0.10.2 with its bundled compiler and solver; no separate Rumoca CLI is needed:
+Use a scenario from the pinned library. Rumoca 0.10.2 includes its compiler and solver; no separate Rumoca CLI is needed:
 
 ```sh
-npm run simulate -- \
-  ../modelica_models/Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml \
-  --out exports/rdd2
+rdd2-simulate Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml --out exports/rdd2
 ```
 
 Import the resulting `trace.arrow`; its metadata is embedded, so no sidecar is needed. Add `--format csv` to produce
-`trace.csv` and `manifest.json` instead. Use `npm run simulate -- --help` for simulation settings and mission geometry.
+`trace.csv` and `manifest.json` instead. Use `rdd2-simulate --help` for simulation settings and mission geometry.
 
 To convert an existing CSV without running a simulation, use the secondary command:
 
 ```sh
-npm run convert:csv -- existing.csv --out exports/flight
+rdd2-convert-csv existing.csv --out exports/flight
 ```
 
 The tool reports stages, elapsed time, and write progress on stderr; `--quiet` suppresses these messages.
@@ -64,27 +66,29 @@ Metadata records model-loading and simulation timings; final write/publication t
 Simulation provenance records the Rumoca package/native versions and the native extension's SHA-256.
 Stdout contains the final output directory.
 
-For batch simulations from the app, run `npm run service` and connect **Simulation** to `http://127.0.0.1:8765`.
+For batch simulations from the app, run `rdd2-service` and connect **Simulation** to `http://127.0.0.1:8765`.
 
 ## Build and test
 
 ```sh
-npm run build                         # Type-check and build into dist/
-npm test                              # Data and numerical tests
-npm run test:python                   # uv installs the Python environment; Rumoca not required
-npx playwright install chromium       # One-time browser setup
-RDD2_PREVIEW=1 npm run test:browser    # Browser tests against the production build
+rdd2-build          # Type-check and build into dist/
+rdd2-serve          # Build, then serve the production bundle locally
+rdd2-test           # Core, Python, build, and browser tests
 ```
 
-`npm run preview` serves the build. Browser tests start their own server; set `RDD2_GPS_TRACE` to a qualification CSV
+`rdd2-preview` serves an existing build. Linux browser tests use pinned Chromium;
+see [browser setup](docs/nix.md#browsers-and-maintenance) for macOS.
+Browser tests start their own server; set `RDD2_GPS_TRACE` to a qualification CSV
 or `RDD2_RUMOCA_BUNDLE` to a bundle directory to include optional artifact tests.
 
 Tests are grouped by behavior in [tests/core](tests/core/) and [tests/browser](tests/browser/), with shared fixtures
-and actions in their support modules. `npm test` discovers all core `*.test.mjs` suites; Playwright discovers browser
-`*.spec.ts` suites. To run one browser suite, use `npm run test:browser -- tests/browser/playback.spec.ts`.
+and actions in their support modules. Core tests discover all `*.test.mjs` suites; Playwright discovers browser
+`*.spec.ts` suites. Use `rdd2-test-core` / `rdd2-test-python` for individual unit-test suites,
+or `rdd2-test-browser tests/browser/playback.spec.ts` for one browser suite.
 
-[GitHub Actions](.github/workflows/ci.yml) runs formatting checks, core/Python tests, the production build, and browser
-tests on every push and pull request. Browser reports and failure traces are retained for 14 days;
+[GitHub Actions](.github/workflows/ci.yml) uses the same locked Nix environment for formatting checks, core/Python tests,
+production builds, and browser tests on every push and pull request. Successful pushes to `main` deploy to GitHub Pages.
+Browser reports and failure traces are retained for 14 days;
 the two simulation-artifact tests skip until their log fixtures are supplied.
 
 ## Development
@@ -97,22 +101,20 @@ The Python simulation tool starts at [tools/rdd2_simulate.py](tools/rdd2_simulat
 and provenance modules in [tools/rdd2_simulation](tools/rdd2_simulation/).
 
 ```sh
-npm run format
-npm run format:check
-npm run format:python
-npm run format:python:check
+rdd2-format         # Prettier, Black, and Nix formatting
+rdd2-check          # Check all formatting
 ```
 
 Prettier and Black target 120-character lines.
 Python dependencies live in `pyproject.toml` and `uv.lock`; `.python-version` selects Python 3.11 by default.
 Use `uv add` / `uv add --dev` to change dependencies and include the updated `uv.lock` in the same commit.
 Use `uv lock --upgrade-package <package>` for a compatible dependency update, or edit an exact pin with `uv add`.
-The npm commands prepare the Python environment automatically. To regenerate the Python-to-JavaScript test fixture:
+The shortcuts prepare the Python environment automatically. To regenerate the Python-to-JavaScript test fixture:
 
 ```sh
 uv run --locked tests/fixtures/generate_arrow.py
 ```
 
-Profile imports with `npm run benchmark -- /path/to/trace.arrow` (CSV also supported).
+Profile imports with `rdd2-benchmark /path/to/trace.arrow` (CSV also supported).
 
 Licensed under [MIT](LICENSE).

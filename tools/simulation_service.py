@@ -357,7 +357,9 @@ def main():
 
     p = argparse.ArgumentParser(description=__doc__)
 
-    p.add_argument("--modelica-root", type=Path, default=Path("../modelica_models"))
+    p.add_argument(
+        "--modelica-root", type=Path, default=Path(os.environ.get("RDD2_MODELICA_ROOT") or "../modelica_models")
+    )
     p.add_argument("--artifacts", type=Path, default=Path("artifacts/jobs"))
     p.add_argument("--port", type=int, default=8765)
     p.add_argument(

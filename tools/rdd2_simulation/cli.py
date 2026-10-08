@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from .bundle import export_bundle
+from .paths import default_modelica_root
 
 
 def parser():
@@ -27,9 +28,17 @@ def parser():
         help="Run an RDD2 scenario and write an Arrow log",
         description="Simulate RDD2 with the Rumoca Python compiler.",
     )
-    run.add_argument("scenario", type=Path, metavar="SCENARIO", help="Rumoca scenario TOML inside modelica_models")
     run.add_argument(
-        "--modelica-root", type=Path, default=Path("../modelica_models"), help="Modelica checkout directory"
+        "scenario",
+        type=Path,
+        metavar="SCENARIO",
+        help="Rumoca scenario TOML path, optionally relative to the model library",
+    )
+    run.add_argument(
+        "--modelica-root",
+        type=Path,
+        default=default_modelica_root(),
+        help="Model sources (default: RDD2_MODELICA_ROOT or ../modelica_models)",
     )
     run.add_argument("--stop-time", type=float, help="Override the scenario's final simulation time in seconds")
 

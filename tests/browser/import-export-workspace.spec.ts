@@ -103,11 +103,16 @@ test('import toasts suppress quick flashes and retain stable, cancellable feedba
           if (node instanceof Element && node.matches('.import-toast')) observed.mounts++;
     }).observe(document, { childList: true, subtree: true });
   });
+  // Load normally, then pause before imports. A fixed future target avoids a driver round-trip clock race.
+  await page.clock.install({ time: new Date('2024-01-01T00:00:00Z') });
   await page.goto('/');
+  await page.clock.pauseAt(new Date('2024-01-02T00:00:00Z'));
   await page.getByTestId('trace-input').setInputFiles(uploadFile('quick.csv', poseCsv));
 
+  // Let the immediate failure commit before advancing past the notification's reveal deadline.
+  await page.clock.runFor(1);
   await expect(page.getByRole('alert')).toContainText('Quick import failure');
-  await page.waitForTimeout(250);
+  await page.clock.runFor(249);
   expect(
     await page.evaluate(
       () => (window as unknown as { importToastObserver: { mounts: number } }).importToastObserver.mounts,
@@ -115,11 +120,13 @@ test('import toasts suppress quick flashes and retain stable, cancellable feedba
   ).toBe(0);
 
   await page.getByTestId('trace-input').setInputFiles(uploadFile('pose.csv', poseCsv));
+  await page.clock.runFor(200);
   await expect(page.getByRole('button', { name: 'Cancel import' })).toBeVisible();
   await page.evaluate(() => {
     (window as unknown as { importToastObserver: { element: Element | null } }).importToastObserver.element =
       document.querySelector('.import-toast');
   });
+  await page.clock.runFor(1000);
   await expect(page.locator('.run-title')).toHaveText('pose.csv');
   await expect(page.locator('.import-toast')).toContainText('Log imported');
   expect(
@@ -132,9 +139,11 @@ test('import toasts suppress quick flashes and retain stable, cancellable feedba
 
   // A new pending batch stacks with the retained completion and previous failure; cancellation removes only it.
   await page.getByTestId('trace-input').setInputFiles(uploadFile('later.csv', poseCsv));
+  await page.clock.runFor(200);
   await expect(page.locator('.import-toast')).toHaveCount(2);
   await page.getByRole('button', { name: 'Cancel import' }).click();
   await expect(page.locator('.import-toast')).toHaveCount(1);
+  await page.clock.runFor(1200);
   await expect(page.locator('.import-toast')).toHaveCount(0);
   await expect(page.getByRole('alert')).toContainText('Quick import failure');
   await expect(page.locator('.run-title')).toHaveText('pose.csv');

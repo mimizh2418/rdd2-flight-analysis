@@ -18,7 +18,7 @@ jobs:
   checks:
     name: Formatting and unit tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Check out source
@@ -26,48 +26,41 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
-          node-version: '22'
-          cache: npm
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - name: Cache dependency downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          python-version-file: .python-version
+          path: |
+            ~/.npm
+            ~/.cache/uv
+          key: ${{ runner.os }}-${{ runner.arch }}-nix-downloads-${{ hashFiles('flake.lock', 'package-lock.json', 'uv.lock') }}
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: '0.12.22'
-          enable-cache: true
-          cache-dependency-glob: uv.lock
+      - name: Validate the locked Nix environment
+        run: nix flake check --no-update-lock-file --no-build
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Install locked dependencies
+        run: nix develop --no-update-lock-file --command rdd2-install
 
-      - name: Install locked Python dependencies
-        run: uv sync --locked
-
-      - name: Check frontend and repository formatting
-        run: npm run format:check
-
-      - name: Check Python formatting
-        run: uv run --locked black --check tools tests
+      - name: Check repository, Python, and Nix formatting
+        run: nix develop --no-update-lock-file --command rdd2-check
 
       - name: Run core tests
-        run: npm test
+        run: nix develop --no-update-lock-file --command rdd2-test-core
 
       - name: Run Python tests
-        run: npm run test:python
+        run: nix develop --no-update-lock-file --command rdd2-test-python
 
   browser:
     name: Production build and browser tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
-      RDD2_PREVIEW: '1'
       PLAYWRIGHT_HTML_OPEN: never
 
     steps:
@@ -76,26 +69,32 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
-          node-version: '22'
-          cache: npm
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Cache dependency downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.npm
+            ~/.cache/uv
+          key: ${{ runner.os }}-${{ runner.arch }}-nix-downloads-${{ hashFiles('flake.lock', 'package-lock.json', 'uv.lock') }}
 
-      - name: Install Chromium and system dependencies
-        run: npx playwright install --with-deps chromium
-
-      - name: Type-check and build
-        run: npm run build
+      - name: Install locked dependencies
+        run: nix develop --no-update-lock-file --command rdd2-install
 
       # Playwright keeps one worker for rendering/timing assertions and starts its own production preview server.
+      # The Nix shortcut builds first and uses pinned Chromium against the production preview.
       # Simulation-artifact tests skip until RDD2_GPS_TRACE and RDD2_RUMOCA_BUNDLE fixtures are supplied.
-      - name: Run browser tests
+      - name: Type-check, build, and run browser tests
         id: tests
-        run: npm run test:browser -- --forbid-only --trace=retain-on-failure --reporter=line,html
+        run: >-
+          nix develop --no-update-lock-file --command
+          rdd2-test-browser --forbid-only --trace=retain-on-failure --reporter=line,html
 
       - name: Upload browser reports and traces
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
@@ -113,7 +112,7 @@ jobs:
     needs: [checks, browser]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     permissions:
       contents: read
@@ -134,18 +133,27 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
-          node-version: '22'
-          cache: npm
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Cache dependency downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.npm
+            ~/.cache/uv
+          key: ${{ runner.os }}-${{ runner.arch }}-nix-downloads-${{ hashFiles('flake.lock', 'package-lock.json', 'uv.lock') }}
+
+      - name: Install locked dependencies
+        run: nix develop --no-update-lock-file --command rdd2-install
 
       # Apply the repository subdirectory only to the deployed build; local CI previews keep their root URL.
       - name: Build for GitHub Pages
-        run: npm run build -- --base /rdd2-flight-analysis/
+        run: nix develop --no-update-lock-file --command rdd2-build --base /rdd2-flight-analysis/
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6

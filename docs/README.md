@@ -16,13 +16,14 @@ are shared. Scalar values show up to six decimal places. Source names appear bes
 
 ## Guides
 
-| Topic                                       | Guide                                                 |
-| ------------------------------------------- | ----------------------------------------------------- |
-| Log schema and metadata                     | [Arrow format](arrow-format.md)                       |
-| Recognized signals, units, and calculations | [Data and diagnostics](data-and-diagnostics.md)       |
-| Paths, poses, and camera following          | [Trajectory view](views/trajectory.md)                |
-| Time-series plots and two Y axes            | [Graph view](views/graph.md)                          |
-| Attitude and actuation overlays             | [Vehicle view](views/vehicle.md)                      |
-| Time alignment, export, and saved layouts   | [Playback and workspaces](playback-and-workspaces.md) |
-| Generate logs and run the local service     | [Simulation tool](simulation-tool.md)                 |
-| Modules, workers, and validation            | [Architecture](architecture.md)                       |
+| Topic                                                | Guide                                                 |
+| ---------------------------------------------------- | ----------------------------------------------------- |
+| Log schema and metadata                              | [Arrow format](arrow-format.md)                       |
+| Recognized signals, units, and calculations          | [Data and diagnostics](data-and-diagnostics.md)       |
+| Paths, poses, and camera following                   | [Trajectory view](views/trajectory.md)                |
+| Time-series plots and two Y axes                     | [Graph view](views/graph.md)                          |
+| Attitude and actuation overlays                      | [Vehicle view](views/vehicle.md)                      |
+| Time alignment, export, and saved layouts            | [Playback and workspaces](playback-and-workspaces.md) |
+| Generate logs and run the local service              | [Simulation tool](simulation-tool.md)                 |
+| Pinned development environment and command shortcuts | [Nix tooling](nix.md)                                 |
+| Modules, workers, and validation                     | [Architecture](architecture.md)                       |

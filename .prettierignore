@@ -1,5 +1,6 @@
 node_modules/
 .venv/
+.venv-nix/
 dist/
 .test-build/
 artifacts/
