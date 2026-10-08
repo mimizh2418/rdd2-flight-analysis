@@ -30,6 +30,7 @@ flowchart LR
 | [Math](../src/math/)                                                | Rotations, path-distance queries, and time-weighted statistics                                                                                  |
 | [Workers](../src/workers/)                                          | Import/normalization, selected-field preparation, Arrow export and analysis                                                                     |
 | [Python modules](../tools/rdd2_simulation/)                         | Scenario execution, telemetry extraction, metadata, staged log publication                                                                      |
+| [Nix flake](../flake.nix), [lock](../flake.lock)                    | Pinned tools/model sources, shells, and shortcuts; uv manages Python packages                                                                   |
 
 ## Data and responsiveness
 
@@ -48,12 +49,12 @@ there is no lazy on-disk column query.
 
 ## Validation
 
-| Suite                                                 | Covers                                                                                        |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [Core](../tests/core/) (`npm test`)                   | Parsing, Arrow round trips, normalization, math, playback, preparation and workspace behavior |
-| [Browser](../tests/browser/) (`npm run test:browser`) | Imports, tabs/dock interactions, graph/3D rendering, playback, persistence and export         |
-| [Python](../tests/) (`npm run test:python`)           | Simulation tool, Arrow/CSV publication, provenance, failures and service behavior             |
+| Suite                                              | Covers                                                                                        |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [Core](../tests/core/) (`rdd2-test-core`)          | Parsing, Arrow round trips, normalization, math, playback, preparation and workspace behavior |
+| [Browser](../tests/browser/) (`rdd2-test-browser`) | Imports, tabs/dock interactions, graph/3D rendering, playback, persistence and export         |
+| [Python](../tests/) (`rdd2-test-python`)           | Simulation tool, Arrow/CSV publication, provenance, failures and service behavior             |
 
 The [Python-generated Arrow fixture](../tests/fixtures/generate_arrow.py) checks cross-language compatibility.
 Optional browser artifact tests require `RDD2_GPS_TRACE` or `RDD2_RUMOCA_BUNDLE` and otherwise skip.
-See the [README](../README.md#build-and-test) for commands and [CI](../.github/workflows/ci.yml) for automated checks.
+Commands assume `nix develop`; see the [README](../README.md#build-and-test) and [CI](../.github/workflows/ci.yml).

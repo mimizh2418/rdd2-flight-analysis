@@ -10,6 +10,7 @@ import time
 from .arrow_io import arrow_modules, csv_to_arrow, write_arrow
 from .csv_io import copy_and_hash, scan_csv
 from .metadata import SCHEMA, signal_catalog
+from .paths import resolve_scenario
 from .progress import Progress
 from .provenance import sha256
 from .simulation import simulate
@@ -84,7 +85,7 @@ def export_bundle(args) -> Path:
                 provenance["source_csv_sha256"] = digest
         else:
             root = args.modelica_root.resolve()
-            scenario = args.scenario.resolve()
+            scenario = resolve_scenario(args.scenario, root)
 
             if not scenario.is_relative_to(root):
                 raise ValueError("Scenario must be inside the supplied modelica_models checkout")

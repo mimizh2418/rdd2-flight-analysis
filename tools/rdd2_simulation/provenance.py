@@ -34,10 +34,10 @@ def source_identity(root: Path) -> dict:
     Args:
         root: Modelica checkout whose model/config/resource inputs are inspected.
     Returns:
-        Source SHA-256, optional Git revision, and optional dirty-tree status.
+        Source SHA-256, optional Git/Nix revision, and optional dirty-tree status.
     Notes:
         Includes relative filenames and file digests; excludes generated artifacts and dependencies. Git identity is
-        None when unavailable rather than invented.
+        None when unavailable. A matching Nix model root supplies its explicit pinned revision without a .git folder.
     """
 
     digest = hashlib.sha256()
@@ -65,8 +65,18 @@ def source_identity(root: Path) -> dict:
     revision = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], text=True, capture_output=True)
     dirty = subprocess.run(["git", "-C", str(root), "status", "--porcelain"], text=True, capture_output=True)
 
+    pinned_root = os.environ.get("RDD2_MODELICA_ROOT")
+    pinned_revision = os.environ.get("RDD2_MODELICA_REVISION")
+    from_nix = (
+        revision.returncode != 0
+        and bool(pinned_root and pinned_revision)
+        and root.resolve() == Path(pinned_root).resolve()
+    )
+
     return {
-        "model_revision": revision.stdout.strip() if revision.returncode == 0 else None,
+        "model_revision": (
+            revision.stdout.strip() if revision.returncode == 0 else pinned_revision if from_nix else None
+        ),
         "source_sha256": digest.hexdigest(),
         "working_tree_dirty": bool(dirty.stdout) if dirty.returncode == 0 else None,
     }
