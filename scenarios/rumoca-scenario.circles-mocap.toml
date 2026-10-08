@@ -1,0 +1,14 @@
+source_roots = [".."]
+
+[rumoca]
+version = "1"
+task = "simulate"
+
+[model]
+file = "CircleMission.mo"
+name = "Rdd2Scenarios.CircleMission"
+
+[sim]
+dt = 0.01
+t_end = 110.0
+solver = "rk-like"

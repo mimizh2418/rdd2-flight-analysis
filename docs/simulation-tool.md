@@ -8,18 +8,24 @@ The simulation extra provides Rumoca 0.10.2 with its compiler and solver, so a s
 ## Run a scenario
 
 ```sh
-rdd2-simulate \
-  Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml \
-  --out exports/rdd2
+rdd2-simulate scenarios/rumoca-scenario.qualification-mocap.toml
 ```
 
-Import `exports/rdd2/trace.arrow` into the viewer. Simulation writes numeric columns directly to Arrow without an
-intermediate CSV. Use a new or empty output directory; existing artifacts are not overwritten.
+Output defaults to `exports/<scenario-name>/`, relative to the working directory, stripping `rumoca-scenario` and
+its separator from the filename stem. A bare `rumoca-scenario.toml` uses `exports/scenario/`.
+Import `exports/qualification-mocap/trace.arrow` into the viewer. Simulation writes directly to Arrow without an
+intermediate CSV. Existing artifacts are not overwritten; use `--out` with a new or empty directory for another run.
 
 The model root comes from `RDD2_MODELICA_ROOT`, so no sibling checkout is needed.
+To use a modified checkout instead, pass `--modelica-root ../modelica_models`. This controls Rumoca's compiler roots,
+not just provenance. Project scenarios always use the local working-tree sources.
+
+[Project scenarios](../scenarios/README.md) include the qualification box and five approximate 3 m-radius circles,
+both using mocap and the upstream waypoint planner.
 
 | Option                 | Purpose                                                                 |
 | ---------------------- | ----------------------------------------------------------------------- |
+| `--out PATH`           | Override the default export directory                                   |
 | `--modelica-root PATH` | Model sources; defaults to `RDD2_MODELICA_ROOT` or `../modelica_models` |
 | `--stop-time SECONDS`  | Override the scenario duration with a positive finite value             |
 | `--mission-json PATH`  | Attach resolved mission geometry; it is not extracted automatically     |
@@ -38,6 +44,7 @@ Arrow writing reports row progress. Stdout from the Python tool contains the com
 
 Metadata records source identity, solver settings, observed coverage, timing information, and Rumoca package/native
 versions plus the native extension hash. Source checks before/after the run detect input changes.
+Local project scenarios outside the model checkout are also fingerprinted, with their identity in `scenario_sources`.
 Logs ending before the requested duration are marked partial. Output is staged privately and published after completion;
 failure removes the staging output.
 
@@ -59,7 +66,8 @@ rdd2-service
 
 Connect the app's **Simulation** panel to `http://127.0.0.1:8765`, choose a discovered scenario, and submit a job.
 The service runs one simulation at a time, supports status polling/cancellation, and imports a completed artifact.
-It discovers `Vehicles/Rdd2/Test/rumoca-scenario.*.toml` under the configured checkout.
+It discovers local `scenarios/rumoca-scenario.*.toml` and upstream `Vehicles/Rdd2/Test/rumoca-scenario.*.toml`
+under the configured model library. Edits to existing files apply to the next job; restart the service to discover new files.
 This is batch execution followed by log import; telemetry is not streamed while the solver runs.
 
 Run `rdd2-service --help` for checkout, artifact-directory, and port options.

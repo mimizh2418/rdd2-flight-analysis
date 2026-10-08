@@ -1,0 +1,14 @@
+source_roots = [".."]
+
+[rumoca]
+version = "1"
+task = "simulate"
+
+[model]
+file = "QualificationMission.mo"
+name = "Rdd2Scenarios.QualificationMission"
+
+[sim]
+dt = 0.01
+t_end = 45.0
+solver = "rk-like"

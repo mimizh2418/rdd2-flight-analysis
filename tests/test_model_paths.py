@@ -8,9 +8,61 @@ import unittest
 from unittest.mock import patch
 
 from exporter_support import exporter, provenance
+from rdd2_simulation.paths import PROJECT_SCENARIOS, resolve_scenario
 
 
 class ModelPathTests(unittest.TestCase):
+    def test_project_scenario_uses_working_tree_even_if_an_old_packaged_copy_exists(self):
+        """Read local scenario edits directly instead of selecting a stale library copy."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = PROJECT_SCENARIOS / "rumoca-scenario.qualification-mocap.toml"
+            packaged = root / "Rdd2Scenarios" / source.name
+
+            self.assertEqual(resolve_scenario(source, root), source.resolve())
+
+            packaged.parent.mkdir()
+            packaged.write_text("# stale scenario\n")
+            self.assertEqual(resolve_scenario(source, root), source.resolve())
+
+    def test_project_scenario_reaches_a_developer_checkout(self):
+        """Allow an uncopied project scenario with an explicit checkout instead of requiring a Nix package."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scenario = PROJECT_SCENARIOS / "rumoca-scenario.qualification-mocap.toml"
+            arguments = exporter.parser().parse_args(
+                ["run", str(scenario), "--modelica-root", str(root), "--out", str(root / "out"), "--format", "csv"]
+            )
+
+            with patch("rdd2_simulation.bundle.simulate", side_effect=RuntimeError("reached simulation")) as simulate:
+                with self.assertRaisesRegex(RuntimeError, "reached simulation"):
+                    exporter.export_bundle(arguments)
+
+            self.assertEqual(simulate.call_args.args[:2], (scenario.resolve(), root.resolve()))
+
+    def test_missing_model_root_is_rejected_before_runtime_load(self):
+        """Report an invalid checkout path without importing or starting the simulation runtime."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            arguments = exporter.parser().parse_args(
+                [
+                    "run",
+                    "flight.toml",
+                    "--modelica-root",
+                    str(root / "missing"),
+                    "--out",
+                    str(root / "out"),
+                    "--format",
+                    "csv",
+                ]
+            )
+
+            with patch("rdd2_simulation.bundle.simulate") as simulate:
+                with self.assertRaisesRegex(ValueError, "Modelica root must be an existing directory"):
+                    exporter.export_bundle(arguments)
+
+            simulate.assert_not_called()
+
     def test_environment_default_and_explicit_override(self):
         """Use the pinned library by default while preserving an explicit developer checkout."""
         with patch.dict(os.environ, {"RDD2_MODELICA_ROOT": "/nix/store/pinned-models"}):
@@ -72,7 +124,7 @@ class ModelPathTests(unittest.TestCase):
             pinned.mkdir()
             developer.mkdir()
             (pinned / "Vehicle.mo").write_text("model Vehicle end Vehicle;")
-            revision = "ea5c4750b271392d4940e8619751b112f9669ee3"
+            revision = "dfdb3294f61ab639a8a8be19611a1f69187a3ff7"
 
             with (
                 patch.dict(os.environ, {"RDD2_MODELICA_ROOT": str(pinned), "RDD2_MODELICA_REVISION": revision}),

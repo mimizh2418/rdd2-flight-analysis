@@ -5,16 +5,65 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import Mock, patch
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 
-SPEC = importlib.util.spec_from_file_location("service", Path(__file__).parents[1] / "tools/simulation_service.py")
+from exporter_support import SIMULATOR_PATH
+
+SPEC = importlib.util.spec_from_file_location("service", SIMULATOR_PATH.with_name("simulation_service.py"))
 service = importlib.util.module_from_spec(SPEC)
 
 SPEC.loader.exec_module(service)
 
 
 class ServiceTests(unittest.TestCase):
+    def test_project_scenarios_are_discovered_without_allowing_external_symlinks(self):
+        """Discover local missions beside upstream scenarios and reject symlinks escaping either source tree."""
+        with tempfile.TemporaryDirectory() as outside:
+            directory = self.project_scenarios
+            scenario = directory / "rumoca-scenario.circles-mocap.toml"
+            scenario.write_text("[sim]\nt_end = 110.0\n")
+            external = Path(outside) / "outside.toml"
+            external.write_text("[sim]\nt_end = 1.0\n")
+            (directory / "rumoca-scenario.escape.toml").symlink_to(external)
+            upstream = self.root / "Vehicles/Rdd2/Test"
+            (upstream / "rumoca-scenario.escape.toml").symlink_to(external)
+            # An upstream alias into the separate project tree must also be rejected.
+            (upstream / "rumoca-scenario.project-alias.toml").symlink_to(scenario)
+            jobs = service.Jobs(self.root, self.root / "project-jobs")
+
+            try:
+                local_name = f"scenarios/{scenario.name}"
+                self.assertEqual(set(jobs.scenarios), {self.scenario, local_name})
+                self.assertEqual(jobs.scenarios[local_name], scenario.resolve())
+            finally:
+                jobs.executor.shutdown(wait=True)
+
+    def test_local_job_passes_its_current_source_and_the_selected_library_to_exporter(self):
+        """Forward local scenario paths and preserve the root override without starting a real simulation."""
+        scenario = self.project_scenarios / "rumoca-scenario.local.toml"
+        scenario.write_text("# original scenario\n")
+        jobs = service.Jobs(self.root, self.root / "local-jobs")
+        ident = "local-job"
+        jobs.items[ident] = {"id": ident, "scenario": f"scenarios/{scenario.name}", "state": "queued"}
+        process = Mock()
+        process.wait.return_value = 0
+
+        # Existing paths are read by the exporter at run time, so edits need no rediscovery or Nix rebuild.
+        scenario.write_text("# edited scenario\n")
+        try:
+            with patch.object(service.subprocess, "Popen", return_value=process) as launch:
+                jobs.run(ident)
+
+            command = launch.call_args.args[0]
+            self.assertEqual(command[3], str(scenario.resolve()))
+            self.assertEqual(command[command.index("--modelica-root") + 1], str(self.root))
+            self.assertEqual(scenario.read_text(), "# edited scenario\n")
+            self.assertEqual(jobs.items[ident]["state"], "complete")
+        finally:
+            jobs.executor.shutdown(wait=True)
+
     def test_completed_arrow_artifact_streams_without_a_manifest(self):
         """Serve binary bytes with the Arrow MIME type, and report an absent CSV sidecar as 404."""
         ident = "arrow-result"
@@ -41,7 +90,13 @@ class ServiceTests(unittest.TestCase):
         """
 
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        workspace = Path(self.temporary.name)
+        self.root = workspace / "models"
+        self.project_scenarios = workspace / "scenarios"
+        self.project_scenarios.mkdir()
+        project_patch = patch.object(service, "PROJECT_SCENARIOS", self.project_scenarios)
+        project_patch.start()
+        self.addCleanup(project_patch.stop)
         scenario = self.root / "Vehicles/Rdd2/Test/rumoca-scenario.smoke.toml"
 
         scenario.parent.mkdir(parents=True)

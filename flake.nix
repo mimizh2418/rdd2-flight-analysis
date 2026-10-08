@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/fd1462031fdee08f65fd0b4c6b64e22239a77870";
     modelica-models = {
-      url = "github:CogniPilot/modelica_models/ea5c4750b271392d4940e8619751b112f9669ee3";
+      url = "github:CogniPilot/modelica_models/dfdb3294f61ab639a8a8be19611a1f69187a3ff7";
       # Fetch only library sources, without the upstream OpenModelica/Rust development environment.
       flake = false;
     };

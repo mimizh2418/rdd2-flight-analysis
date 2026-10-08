@@ -16,7 +16,8 @@ def parser():
 
     Returns:
         ArgumentParser whose run command accepts a scenario and simulation settings, and whose convert-csv
-        command accepts an existing log and optional receipt. Both commands default to Arrow output.
+        command accepts an existing log and optional receipt. Both commands default to Arrow output; only
+        conversion requires an explicit output directory.
     """
 
     p = argparse.ArgumentParser(description=__doc__)
@@ -32,7 +33,7 @@ def parser():
         "scenario",
         type=Path,
         metavar="SCENARIO",
-        help="Rumoca scenario TOML path, optionally relative to the model library",
+        help="Rumoca scenario TOML in scenarios/ or relative to the model library",
     )
     run.add_argument(
         "--modelica-root",
@@ -41,6 +42,7 @@ def parser():
         help="Model sources (default: RDD2_MODELICA_ROOT or ../modelica_models)",
     )
     run.add_argument("--stop-time", type=float, help="Override the scenario's final simulation time in seconds")
+    run.add_argument("--out", type=Path, help="Output directory (default: exports/<scenario-name>)")
 
     conversion = commands.add_parser(
         "convert-csv",
@@ -49,11 +51,9 @@ def parser():
     )
     conversion.add_argument("csv", type=Path, metavar="CSV", help="Existing numeric CSV log")
     conversion.add_argument("--receipt", type=Path, help="Existing CSV provenance receipt to verify and preserve")
+    conversion.add_argument("--out", type=Path, required=True, help="Output directory for the converted log")
 
     for command in (run, conversion):
-        command.add_argument(
-            "--out", type=Path, required=True, help="Output directory for trace.arrow (or the CSV bundle)"
-        )
         command.add_argument(
             "--format",
             choices=("arrow", "csv"),

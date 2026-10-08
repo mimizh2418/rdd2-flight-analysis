@@ -80,3 +80,31 @@ def source_identity(root: Path) -> dict:
         "source_sha256": digest.hexdigest(),
         "working_tree_dirty": bool(dirty.stdout) if dirty.returncode == 0 else None,
     }
+
+
+def simulation_source_identity(root: Path, scenario: Path) -> dict:
+    """Fingerprint the selected library and any project scenario sources outside it.
+
+    Args:
+        root: Resolved Modelica library directory.
+        scenario: Resolved scenario actually compiled.
+    Returns:
+        Library identity with a combined source digest and separate scenario_sources identity when needed.
+    Notes:
+        Project scenarios used with a developer checkout live in a separate repository. Include their models,
+        TOML, and package files so before/after checks detect edits to either set of simulation inputs.
+    """
+    identity = source_identity(root)
+    if scenario.is_relative_to(root):
+        return identity
+
+    scenario_identity = source_identity(scenario.parent)
+    combined = hashlib.sha256()
+    combined.update(bytes.fromhex(identity["source_sha256"]))
+    combined.update(bytes.fromhex(scenario_identity["source_sha256"]))
+
+    return {
+        **identity,
+        "source_sha256": combined.hexdigest(),
+        "scenario_sources": {"path": str(scenario.parent), **scenario_identity},
+    }

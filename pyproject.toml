@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy==2.4.3",
     "pyarrow==23.0.1",
+    "tomli-w==1.2.0",
 ]
 
 [project.optional-dependencies]

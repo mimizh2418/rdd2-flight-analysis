@@ -1,6 +1,6 @@
 """Validate scenario export, truthful timings, and provenance guards with a public-API Rumoca stub."""
 
-from contextlib import ExitStack
+from contextlib import ExitStack, chdir
 import hashlib
 import json
 from pathlib import Path
@@ -30,6 +30,65 @@ class ResultStub:
 
 
 class SimulationTests(unittest.TestCase):
+    def test_default_output_uses_the_scenario_filename_and_preserves_existing_logs(self):
+        """Export stub results under the working directory and reject a repeated run before calling the runtime."""
+        cases = [
+            ("rumoca-scenario.qualification-mocap.toml", "qualification-mocap"),
+            ("rumoca-scenario-circles-mocap.toml", "circles-mocap"),
+            ("rumoca-scenario.toml", "scenario"),
+            ("custom.mission.toml", "custom.mission"),
+        ]
+
+        for encoding in ("arrow", "csv"):
+            for index, (filename, name) in enumerate(cases):
+                with self.subTest(format=encoding, scenario=filename):
+                    workspace = self.root / f"case-{encoding}-{index}"
+                    workspace.mkdir()
+                    scenario = self.root / filename
+                    scenario.write_text(self.scenario.read_text())
+                    arguments = exporter.parser().parse_args(
+                        ["run", str(scenario), "--modelica-root", str(self.root), "--format", encoding, "--quiet"]
+                    )
+
+                    # The library path and optional viewer name must not affect the default destination.
+                    arguments.name = "Display name"
+                    with chdir(workspace):
+                        output = exporter.export_bundle(arguments)
+                        self.assertEqual(output, workspace / "exports" / name)
+                        artifact = output / f"trace.{encoding}"
+                        original = artifact.read_bytes()
+                        self.model.simulate.reset_mock()
+
+                        with self.assertRaisesRegex(ValueError, "Output directory must be empty"):
+                            exporter.export_bundle(arguments)
+
+                        self.model.simulate.assert_not_called()
+                        self.assertEqual(artifact.read_bytes(), original)
+
+    def test_stop_time_overrides_the_mission_duration(self):
+        """Pass a smoke-run limit to the runtime and record it in Arrow metadata, using only a stub."""
+        import pyarrow as pa
+
+        self.scenario.write_text(
+            '[model]\nfile = "Vehicle.mo"\nname = "RDD2"\n[sim]\nt_end = 110\nsolver = "rk-like"\n'
+        )
+        self.args.stop_time = 0.05
+        self.args.format = "arrow"
+
+        # Match the stub's timestamps to the short request without invoking a native solver.
+        result = ResultStub()
+        result.time = [0.0, 0.025, 0.05]
+        self.model.simulate.side_effect = None
+        self.model.simulate.return_value = result
+
+        output = exporter.export_bundle(self.args)
+        table = pa.ipc.open_file(output / "trace.arrow").read_all()
+        manifest = json.loads(table.schema.metadata[b"rdd2:manifest"])
+
+        self.model.simulate.assert_called_once_with(t=(0.0, 0.05), config={"runtime": "config"})
+        self.assertEqual(manifest["solver"]["t_end"], 0.05)
+        self.assertEqual(table["time"].to_pylist(), result.time)
+
     def test_arrow_simulation_does_not_serialize_csv(self):
         """Write native numeric results straight to IPC, carrying provenance inside the file."""
         import pyarrow as pa
@@ -59,7 +118,7 @@ class SimulationTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.scenario = self.root / "scenario.toml"
-        self.scenario.write_text('[model]\nname = "RDD2"\n[sim]\nt_end = 2\nsolver = "auto"\n')
+        self.scenario.write_text('[model]\nfile = "Vehicle.mo"\nname = "RDD2"\n[sim]\nt_end = 2\nsolver = "auto"\n')
         self.native_extension = self.root / "_native.abi3.so"
         self.native_extension.write_bytes(b"test native compiler")
         self.args = exporter.parser().parse_args(
@@ -95,7 +154,7 @@ class SimulationTests(unittest.TestCase):
         )
         patches.enter_context(patch.object(progress.time, "perf_counter", side_effect=lambda: self.clock))
         self.identity = patches.enter_context(
-            patch.object(simulation, "source_identity", return_value={"source_sha256": "unchanged"})
+            patch.object(simulation, "simulation_source_identity", return_value={"source_sha256": "unchanged"})
         )
 
     def simulate(self, **kwargs):

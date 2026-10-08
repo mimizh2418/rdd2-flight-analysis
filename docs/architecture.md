@@ -57,4 +57,6 @@ there is no lazy on-disk column query.
 
 The [Python-generated Arrow fixture](../tests/fixtures/generate_arrow.py) checks cross-language compatibility.
 Optional browser artifact tests require `RDD2_GPS_TRACE` or `RDD2_RUMOCA_BUNDLE` and otherwise skip.
+Scenario tests compile models without executing the solver; exporter tests use a stubbed runtime.
+Full simulations and flight qualification are outside this suite's scope.
 Commands assume `nix develop`; see the [README](../README.md#build-and-test) and [CI](../.github/workflows/ci.yml).

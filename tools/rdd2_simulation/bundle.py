@@ -10,7 +10,7 @@ import time
 from .arrow_io import arrow_modules, csv_to_arrow, write_arrow
 from .csv_io import copy_and_hash, scan_csv
 from .metadata import SCHEMA, signal_catalog
-from .paths import resolve_scenario
+from .paths import PROJECT_SCENARIOS, resolve_scenario
 from .progress import Progress
 from .provenance import sha256
 from .simulation import simulate
@@ -21,7 +21,7 @@ def export_bundle(args) -> Path:
     """Create a trace/manifest bundle, verify supplied provenance, and refuse to overwrite results.
 
     Args:
-        args: Namespace from parser(), with exactly one of csv/scenario and an output directory.
+        args: Namespace from parser(), with exactly one of csv/scenario and an optional simulation output directory.
     Returns:
         Resolved output directory containing trace.arrow, or trace.csv and manifest.json.
     Raises:
@@ -31,6 +31,8 @@ def export_bundle(args) -> Path:
         Stages on the output filesystem so publication uses renames instead of another full CSV copy. Generated
         CSV metadata is collected during writing. Imported CSVs are copied/hashed once, then validated as a stable
         snapshot. Existing results are never overwritten; failures discard the staging files.
+        Without --out, simulations use exports/<scenario-stem> relative to the working directory, removing the
+        rumoca-scenario prefix and its separator. A bare rumoca-scenario.toml uses exports/scenario.
     """
 
     if args.csv and args.stop_time is not None:
@@ -43,7 +45,15 @@ def export_bundle(args) -> Path:
     if output_format == "arrow":
         arrow_modules()  # Fail before starting an expensive simulation when dependencies are missing.
     progress = Progress(quiet=getattr(args, "quiet", False))
-    out = args.out.resolve()
+    out = args.out
+
+    if out is None:
+        # Use the scenario filename, not its parent library/package or the viewer's optional display name.
+        name = args.scenario.stem.removeprefix("rumoca-scenario").lstrip(".-_") or "scenario"
+        out = Path("exports") / name
+
+    out = out.resolve()
+    progress.message(f"Output directory: {out}")
 
     if out.exists() and any(out.iterdir()):
         raise ValueError("Output directory must be empty (existing artifacts will not be overwritten)")
@@ -54,6 +64,7 @@ def export_bundle(args) -> Path:
     with tempfile.TemporaryDirectory(prefix=f".{out.name}-export-", dir=out.parent) as temporary:
         csv_path = Path(temporary) / "trace.csv"
         provenance: dict = {}
+        scenario: Path | None = None
 
         if args.csv:
             source = args.csv.resolve()
@@ -84,11 +95,14 @@ def export_bundle(args) -> Path:
                     trace = TraceSummary(names, observed, "", csv_to_arrow(csv_path, names))
                 provenance["source_csv_sha256"] = digest
         else:
-            root = args.modelica_root.resolve()
+            root = args.modelica_root.expanduser().resolve()
+            if not root.is_dir():
+                raise ValueError(f"Modelica root must be an existing directory: {root}")
+
             scenario = resolve_scenario(args.scenario, root)
 
-            if not scenario.is_relative_to(root):
-                raise ValueError("Scenario must be inside the supplied modelica_models checkout")
+            if not scenario.is_relative_to(root) and not scenario.is_relative_to(PROJECT_SCENARIOS):
+                raise ValueError("Scenario must be inside the supplied modelica_models checkout or project scenarios/")
 
             provenance, trace = simulate(scenario, root, csv_path, args.stop_time, progress, output_format)
 
@@ -109,8 +123,9 @@ def export_bundle(args) -> Path:
             manifest["mission"] = json.loads(args.mission_json.read_text())
             manifest["mission_metadata_sha256"] = sha256(args.mission_json)
 
-        if args.scenario:
-            manifest["scenario_path"] = str(args.scenario.resolve())
+        if scenario is not None:
+            # Record the actual compiled source, including library-relative and local project scenarios.
+            manifest["scenario_path"] = str(scenario)
 
         requested = manifest.get("solver", {}).get("t_end")
 

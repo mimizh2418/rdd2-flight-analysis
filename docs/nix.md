@@ -10,7 +10,8 @@ rdd2-dev
 
 The environment pins Node.js 22/npm, Python 3.11, uv, Git, a Nix formatter, certificates, and native runtime libraries
 through `flake.lock`. Modelica sources are pinned independently to
-`ea5c4750b271392d4940e8619751b112f9669ee3`. They are fetched automatically into the read-only Nix store.
+`dfdb3294f61ab639a8a8be19611a1f69187a3ff7`. They are fetched automatically into the read-only Nix store.
+This repository's [scenarios](../scenarios/README.md) run directly from the working tree against those pinned sources.
 
 ## Shortcuts
 
@@ -35,12 +36,12 @@ Run `rdd2-install` again after changing dependency lock files. Pass arguments di
 
 ```sh
 rdd2-test-browser tests/browser/playback.spec.ts
-rdd2-simulate Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml --out exports/flight
+rdd2-simulate scenarios/rumoca-scenario.qualification-mocap.toml
 rdd2-service --port 8766
 ```
 
 Without entering a shell, Nix applications remain available as `nix run .#ACTION -- ARGS`,
-for example `nix run .#simulate -- Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml --out exports/flight`.
+for example `nix run .#simulate -- scenarios/rumoca-scenario.qualification-mocap.toml`.
 
 ## Python and model sources
 
@@ -48,11 +49,17 @@ uv continues to install packages from `uv.lock`; Nix does not replace Python dep
 `UV_PYTHON` selects the pinned interpreter and disables Python downloads. `.venv-nix` keeps this environment separate
 from the ordinary `.venv`. Downloads are needed initially; entering the shell does not install project dependencies.
 
-`RDD2_MODELICA_ROOT` points to the pinned source tree. CLI scenario paths can be relative to that tree; the service
-discovers its scenarios automatically. `RDD2_MODELICA_REVISION` supplies provenance when the source has no `.git` folder.
+`RDD2_MODELICA_ROOT` points directly to the pinned upstream source tree. CLI scenario paths can be relative to that tree;
+the service discovers upstream and local project scenarios. `RDD2_MODELICA_REVISION` supplies provenance when the source
+has no `.git` folder.
 An explicit `--modelica-root /path/to/checkout` still selects a developer checkout and its own identity.
+Project scenarios run against that checkout directly; copying them into the checkout is unnecessary.
 
-Outputs remain in writable directories selected by `--out` or the service's `--artifacts` option.
+Scenario edits take effect on the next run without re-entering `nix develop`. Restart the service after adding new scenario
+files. Provenance records the upstream `model_revision`; `source_sha256` covers both the library and local scenario sources.
+
+Simulation logs default to `exports/<scenario-name>/`; `--out` overrides the directory.
+The service uses its `--artifacts` directory.
 
 ## Browsers and maintenance
 
@@ -90,6 +97,6 @@ For simulations, supply the model sources separately:
 
 ```sh
 git clone https://github.com/CogniPilot/modelica_models ../modelica_models
-git -C ../modelica_models checkout ea5c4750b271392d4940e8619751b112f9669ee3
-npm run simulate -- ../modelica_models/Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml --out exports/flight
+git -C ../modelica_models checkout dfdb3294f61ab639a8a8be19611a1f69187a3ff7
+npm run simulate -- scenarios/rumoca-scenario.qualification-mocap.toml --modelica-root ../modelica_models
 ```

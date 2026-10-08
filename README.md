@@ -26,7 +26,7 @@ rdd2-dev
 ```
 
 Nix supplies pinned Node.js/npm, Python, uv, development tools, and `modelica_models` at
-`ea5c4750b271392d4940e8619751b112f9669ee3`. uv manages Python dependencies in `.venv-nix`;
+`dfdb3294f61ab639a8a8be19611a1f69187a3ff7`. uv manages Python dependencies in `.venv-nix`;
 a separate model checkout is unnecessary. The 3D views require WebGL.
 
 All `rdd2-*` commands below assume this shell and the repository root.
@@ -49,11 +49,14 @@ See the [documentation](docs/README.md) for view controls, playback/workspaces, 
 Use a scenario from the pinned library. Rumoca 0.10.2 includes its compiler and solver; no separate Rumoca CLI is needed:
 
 ```sh
-rdd2-simulate Vehicles/Rdd2/Test/rumoca-scenario.waypoint-global.toml --out exports/rdd2
+rdd2-simulate scenarios/rumoca-scenario.qualification-mocap.toml
 ```
 
-Import the resulting `trace.arrow`; its metadata is embedded, so no sidecar is needed. Add `--format csv` to produce
+The log defaults to `exports/qualification-mocap/trace.arrow`; use `--out PATH` to change the directory.
+Import `trace.arrow`; its metadata is embedded, so no sidecar is needed. Add `--format csv` to produce
 `trace.csv` and `manifest.json` instead. Use `rdd2-simulate --help` for simulation settings and mission geometry.
+
+See [scenarios](scenarios/README.md) for the mocap qualification mission and five-circle waypoint flight.
 
 To convert an existing CSV without running a simulation, use the secondary command:
 
@@ -85,6 +88,8 @@ Tests are grouped by behavior in [tests/core](tests/core/) and [tests/browser](t
 and actions in their support modules. Core tests discover all `*.test.mjs` suites; Playwright discovers browser
 `*.spec.ts` suites. Use `rdd2-test-core` / `rdd2-test-python` for individual unit-test suites,
 or `rdd2-test-browser tests/browser/playback.spec.ts` for one browser suite.
+Tests cover the exporter/viewer workflow using runtime stubs and saved logs; scenario checks compile without running
+the solver. Full mission simulation and flight qualification belong to `modelica_models`, not this test suite.
 
 [GitHub Actions](.github/workflows/ci.yml) uses the same locked Nix environment for formatting checks, core/Python tests,
 production builds, and browser tests on every push and pull request. Successful pushes to `main` deploy to GitHub Pages.

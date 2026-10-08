@@ -4,14 +4,48 @@ from __future__ import annotations
 
 import importlib.metadata
 from pathlib import Path
+import tempfile
 import tomllib
 
 from .arrow_io import prepare_arrow
 from .csv_io import write_trace
 from .metadata import selected
 from .progress import Progress
-from .provenance import sha256, source_identity
+from .provenance import sha256, simulation_source_identity
 from .trace import TraceSummary
+
+
+def load_scenario(rum, scenario: Path, root: Path):
+    """Compile a scenario using its library hierarchy and any external project models.
+
+    Args:
+        rum: Imported Rumoca public API module.
+        scenario: Resolved original scenario TOML.
+        root: Selected Modelica library directory, including an explicit developer override.
+    Returns:
+        Rumoca's (session, model, config), retaining all original simulation settings.
+    Notes:
+        Rumoca 0.10.2 has no root override on from_scenario. A temporary TOML supplies absolute model paths and
+        the selected roots, leaving the original TOML and library untouched. Compilation completes before cleanup.
+    """
+    # Keep CSV conversion and missing-runtime diagnostics usable without installed simulation dependencies.
+    import tomli_w
+
+    config = tomllib.loads(scenario.read_text())
+    model = config.get("model", {})
+    if "file" in model:
+        model["file"] = str((scenario.parent / model["file"]).resolve())
+    # Nested library packages already belong to root. Registering their directory again as a top-level source
+    # root changes the expected `within` namespace (for example, Vehicles.Rdd2.Test becomes just Test).
+    roots = [str(root)]
+    if not scenario.is_relative_to(root):
+        roots.append(str(scenario.parent))
+    config["source_roots"] = roots
+
+    with tempfile.TemporaryDirectory(prefix="rdd2-scenario-") as directory:
+        effective_scenario = Path(directory) / scenario.name
+        effective_scenario.write_text(tomli_w.dumps(config), encoding="utf-8")
+        return rum.Session.from_scenario(str(effective_scenario))
 
 
 def simulate(
@@ -26,7 +60,7 @@ def simulate(
 
     Args:
         scenario: Scenario TOML validated and compiled by the Rumoca public Python API.
-        root: Modelica checkout used for source identity.
+        root: Modelica checkout used for compilation and source identity.
         output: Staging destination used when output_format is csv.
         stop_time: Optional positive final time in seconds, overriding scenario t_end.
         progress: Reporter shared with bundle packaging to collect separate stage timings.
@@ -47,7 +81,7 @@ def simulate(
         except ImportError as error:
             raise RuntimeError(
                 "Scenario simulation requires the simulation extra: "
-                "uv run --locked --extra simulation tools/rdd2_simulate.py run SCENARIO --out DIRECTORY; "
+                "uv run --locked --extra simulation tools/rdd2_simulate.py run SCENARIO; "
                 f"Rumoca import failed: {error}"
             ) from error
 
@@ -60,12 +94,13 @@ def simulate(
     duration = stop_time if stop_time is not None else float(config_source.get("sim", {}).get("t_end", 45))
     model_name = config_source.get("model", {}).get("name", "unspecified")
     progress.message(f"Model: {model_name}; scenario: {scenario.name}; Rumoca: {python_version}.")
+    progress.message(f"Model library: {root}")
 
     with progress.stage("source_identity_before", "Fingerprinting model inputs"):
-        identity_before = source_identity(root)
+        identity_before = simulation_source_identity(root, scenario)
 
     with progress.stage("model_load", "Loading and compiling the model", heartbeat=True):
-        session, model, config = rum.Session.from_scenario(str(scenario))
+        session, model, config = load_scenario(rum, scenario, root)
 
     solver = config_source.get("sim", {}).get("solver", "auto")
     progress.message(f"Requested flight: 0–{duration:g} s; solver: {solver}.")
@@ -95,7 +130,7 @@ def simulate(
             trace = write_trace(output, names, times, arrays, progress)
 
     with progress.stage("source_identity_after", "Verifying model inputs are unchanged"):
-        identity_after = source_identity(root)
+        identity_after = simulation_source_identity(root, scenario)
 
         # The recorded model digest must describe the same inputs before and after the simulation.
         if identity_before["source_sha256"] != identity_after["source_sha256"]:

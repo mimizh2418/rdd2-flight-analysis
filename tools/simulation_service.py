@@ -17,6 +17,8 @@ import sys
 import threading
 import uuid
 
+from rdd2_simulation.paths import PROJECT_SCENARIOS
+
 
 class Jobs:
     """Serialize simulations while allowing HTTP threads to inspect and cancel jobs safely."""
@@ -25,18 +27,28 @@ class Jobs:
         """Discover allowed scenarios and initialize a queue that runs one simulation at a time.
 
         Args:
-            root: Modelica checkout containing Vehicles/Rdd2/Test scenario files.
+            root: Model library containing upstream Vehicles/Rdd2/Test scenarios.
             artifacts: Directory for per-job bundles and exporter logs.
         Notes:
-            Discovers allowed scenarios once, resolves directory paths, and creates a single-worker executor. The
-            service owner must shut down the executor.
+            Discovers upstream and local project scenarios once, checking symlink containment separately for each
+            source tree. New files require a service restart; edits to existing scenarios are read by each job.
+            The service owner must shut down the single-worker executor.
         """
 
         self.root, self.artifacts = root.resolve(), artifacts.resolve()
-        self.scenarios = {
-            str(p.relative_to(self.root)): p
-            for p in sorted((self.root / "Vehicles/Rdd2/Test").glob("rumoca-scenario.*.toml"))
-        }
+        self.scenarios: dict[str, Path] = {}
+        locations = (
+            (self.root / "Vehicles/Rdd2/Test", self.root, "Vehicles/Rdd2/Test"),
+            (PROJECT_SCENARIOS, PROJECT_SCENARIOS.resolve(), "scenarios"),
+        )
+
+        # Stable API names distinguish the upstream library from this repository's working-tree missions.
+        for directory, allowed_root, prefix in locations:
+            for scenario in sorted(directory.glob("rumoca-scenario.*.toml")):
+                resolved = scenario.resolve()
+                if resolved.is_file() and resolved.is_relative_to(allowed_root):
+                    self.scenarios[f"{prefix}/{scenario.name}"] = resolved
+
         self.items: dict[str, dict] = {}
         self.lock = threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=1)
