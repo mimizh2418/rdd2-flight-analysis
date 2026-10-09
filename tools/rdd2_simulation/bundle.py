@@ -11,7 +11,7 @@ from .csv_io import copy_and_hash, scan_csv
 from .metadata import SCHEMA, signal_catalog
 from .output import ExportTransaction
 from .paths import resolve_scenario
-from .progress import Progress
+from .progress import Progress, format_bytes
 from .provenance import sha256
 from .simulation import simulate
 from .trace import TraceSummary
@@ -84,9 +84,11 @@ def export_bundle(args) -> Path:
     output_format = args.format
     if output_format == "arrow":
         arrow_modules()  # Fail before starting an expensive simulation when dependencies are missing.
-    progress = Progress(quiet=getattr(args, "quiet", False))
+    progress = Progress(quiet=getattr(args, "quiet", False), color=getattr(args, "color", "auto"))
     out = output_directory(args)
-    progress.message(f"Output directory: {getattr(args, 'display_out', out)}")
+    progress.heading("CSV conversion" if args.csv else "Simulation")
+    progress.detail("Output", getattr(args, "display_out", out))
+    progress.detail("Format", "Arrow" if output_format == "arrow" else "CSV + manifest")
 
     # A sibling staging directory shares the output filesystem, including when /tmp is on another mount.
     with ExportTransaction(out) as transaction:
@@ -98,9 +100,9 @@ def export_bundle(args) -> Path:
         if args.csv:
             source = args.csv.resolve()
             receipt = json.loads(args.receipt.read_text()) if args.receipt else None
-            progress.message(f"Input CSV: {source}")
+            progress.detail("Input", source)
 
-            with progress.stage("csv_copy", "Copying and fingerprinting input CSV"):
+            with progress.stage("csv_copy", "Copy and fingerprint CSV"):
                 digest = copy_and_hash(source, csv_path, progress)
 
             if receipt is not None:
@@ -115,12 +117,12 @@ def export_bundle(args) -> Path:
                 # A plain CSV cannot establish which compiler or model revision produced it.
                 provenance = {"provenance_status": "unverified input CSV", "termination": "unknown"}
 
-            with progress.stage("csv_validation", "Validating imported CSV"):
+            with progress.stage("csv_validation", "Validate CSV"):
                 names, observed = scan_csv(csv_path, progress)
 
             trace = TraceSummary(names, observed, digest)
             if output_format == "arrow":
-                with progress.stage("arrow_conversion", "Converting CSV columns to Arrow"):
+                with progress.stage("arrow_conversion", "Convert columns to Arrow"):
                     trace = TraceSummary(names, observed, "", csv_to_arrow(csv_path, names))
                 provenance["source_csv_sha256"] = digest
         else:
@@ -160,16 +162,16 @@ def export_bundle(args) -> Path:
 
         if requested is not None and trace.observed["end_time_s"] < requested - 1e-8:
             manifest["coverage_status"] = "partial"
-            progress.message(
+            progress.warning(
                 f"Partial flight: reached {trace.observed['end_time_s']:g} s of the requested {requested:g} s."
             )
 
         artifact = Path(temporary) / ("trace.arrow" if output_format == "arrow" else "trace.csv")
         if output_format == "arrow":
-            with progress.stage("arrow_write", "Writing Arrow with embedded metadata"):
+            with progress.stage("arrow_write", "Write Arrow and metadata"):
                 write_arrow(artifact, trace.table, manifest, progress)
 
-        with progress.stage("publication", "Publishing completed export"):
+        with progress.stage("publication", "Publish export"):
             staged_manifest = Path(temporary) / "manifest.json"
             if output_format == "csv":
                 staged_manifest.write_text(json.dumps(manifest, indent=2, default=str) + "\n", encoding="utf-8")
@@ -177,11 +179,18 @@ def export_bundle(args) -> Path:
             transaction.publish([artifact, staged_manifest] if output_format == "csv" else [artifact])
 
         observed = trace.observed
-        size = (out / artifact.name).stat().st_size / 1024**2
+        rows = observed["rows"]
+        signals = len(trace.names) - 1
+        size = (out / artifact.name).stat().st_size
         elapsed = time.perf_counter() - progress.started
-        progress.message(
-            f"Log ready: {observed['rows']:,} rows, {len(trace.names) - 1:,} signals, "
-            f"{observed['start_time_s']:g}–{observed['end_time_s']:g} s, {size:.1f} MiB. Total: {elapsed:.2f} s."
+        progress.summary(
+            "Log ready",
+            {
+                "Trace": f"{rows:,} row{'s' if rows != 1 else ''} / {signals:,} signal{'s' if signals != 1 else ''}",
+                "Time span": f"{observed['start_time_s']:g}–{observed['end_time_s']:g} s",
+                "Size": format_bytes(size),
+                "Elapsed": f"{elapsed:.2f} s",
+            },
         )
 
     return out

@@ -7,7 +7,7 @@ import hashlib
 import math
 from pathlib import Path
 
-from .progress import Progress
+from .progress import Progress, format_bytes
 from .trace import CsvStatistics, TraceSummary
 
 
@@ -60,7 +60,7 @@ def scan_csv(path: Path, progress: Progress | None = None) -> tuple[list[str], d
             statistics.add(values)
 
             if progress is not None and statistics.rows % 5000 == 0:
-                progress.update(f"Validated {statistics.rows:,} rows through t={statistics.previous:.6g} s")
+                progress.update(f"{statistics.rows:,} rows / t={statistics.previous:.6g} s")
 
     return headers, statistics.finish()
 
@@ -86,7 +86,7 @@ def copy_and_hash(source: Path, destination: Path, progress: Progress) -> str:
             outgoing.write(chunk)
             digest.update(chunk)
             copied += len(chunk)
-            progress.update(f"Copying CSV: {min(100, copied / max(1, size) * 100):.0f}% ({copied / 1024**2:.1f} MiB)")
+            progress.update(f"{min(100, copied / max(1, size) * 100):.0f}% / {format_bytes(copied)}")
 
     return digest.hexdigest()
 
@@ -123,6 +123,6 @@ def write_trace(output: Path, names: list[str], times, arrays, progress: Progres
             writer.writerow(values)
 
             if (index + 1) % 1000 == 0:
-                progress.update(f"Writing CSV: {(index + 1) / rows * 100:.0f}% ({index + 1:,}/{rows:,} rows)")
+                progress.update(f"{(index + 1) / rows * 100:.0f}% / {index + 1:,}/{rows:,} rows")
 
     return TraceSummary(headers, statistics.finish(), hashing.digest.hexdigest())

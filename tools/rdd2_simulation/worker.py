@@ -7,11 +7,11 @@ import multiprocessing
 import os
 from pathlib import Path
 import signal
-import sys
 import tempfile
 
 from .bundle import export_bundle, output_directory, validate_inputs
 from .output import ExportTransaction
+from .progress import report_error
 
 
 class ExportCancelled(RuntimeError):
@@ -43,7 +43,7 @@ def export_in_worker(args) -> None:
         export_bundle(args)
     except BaseException as error:
         operation = "Simulation" if args.command == "run" else "CSV conversion"
-        print(f"{operation} failed: {error}", file=sys.stderr, flush=True)
+        report_error(f"{operation} failed: {error}", color=getattr(args, "color", "auto"))
         raise SystemExit(130 if isinstance(error, KeyboardInterrupt) else 1) from None
 
 

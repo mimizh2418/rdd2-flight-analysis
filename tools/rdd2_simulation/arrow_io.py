@@ -94,9 +94,7 @@ def write_arrow(output: Path, table, manifest: dict, progress: Progress) -> None
         for batch in table.to_batches(max_chunksize=65536):
             writer.write_batch(pa.RecordBatch.from_arrays(batch.columns, schema=schema))
             written += batch.num_rows
-            progress.update(
-                f"Writing Arrow: {written / table.num_rows * 100:.0f}% ({written:,}/{table.num_rows:,} rows)"
-            )
+            progress.update(f"{written / table.num_rows * 100:.0f}% / {written:,}/{table.num_rows:,} rows")
 
 
 def csv_to_arrow(path: Path, names: list[str]):

@@ -26,24 +26,12 @@ Library-relative paths still work. `[model].file` resolves relative to the TOML 
 [Project scenarios](../scenarios/README.md) include the qualification box and two approximate 3 m-radius circles,
 both using mocap and the upstream waypoint planner.
 
-| Option                 | Purpose                                                                 |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `--out PATH`           | Override the default export directory                                   |
-| `--modelica-root PATH` | Model sources; defaults to `RDD2_MODELICA_ROOT` or `../modelica_models` |
-| `--stop-time SECONDS`  | Override the scenario duration with a positive finite value             |
-| `--mission-json PATH`  | Attach resolved mission geometry; it is not extracted automatically     |
-| `--name NAME`          | Display name for the log                                                |
-| `--format csv`         | Write `trace.csv` plus `manifest.json` instead of Arrow                 |
-| `--quiet`              | Suppress progress on stderr                                             |
+Use `rdd2-simulate --help` for CLI options. Attach mission geometry with `--mission-json PATH`;
+it is not extracted automatically. See the [format guide](arrow-format.md) for the JSON fields.
 
-For mission geometry, the JSON object can contain `waypoints`, `trajectory`, `origin`, `rotor_positions`, and `ground`;
-see the [format guide](arrow-format.md). Use `rdd2-simulate --help` for the current CLI options.
+## Provenance and export behavior
 
-## Progress and provenance
-
-The tool reports setup, source hashing, model loading, simulation, extraction, validation, writing, and publication.
-Long model-loading/simulation stages emit elapsed-time heartbeats; these are not solver completion percentages.
-Arrow writing reports row progress. Stdout from the Python tool contains the completed output directory.
+Status goes to stderr; stdout contains only the completed output directory.
 
 Metadata records source identity, solver settings, observed coverage, timing information, and Rumoca package/native
 versions plus the native extension hash. Source checks before/after the run detect input changes.

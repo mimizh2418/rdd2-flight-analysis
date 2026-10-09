@@ -64,10 +64,8 @@ To convert an existing CSV without running a simulation, use the secondary comma
 rdd2-convert-csv existing.csv --out exports/flight
 ```
 
-The tool reports stages, elapsed time, and write progress on stderr; `--quiet` suppresses these messages.
-Metadata records model-loading and simulation timings; final write/publication timings appear on stderr.
-Simulation provenance records the Rumoca package/native versions and the native extension's SHA-256.
-Stdout contains the final output directory.
+Simulation metadata records compiler identity, source provenance, and timings.
+See [simulation tooling](docs/simulation-tool.md) for details.
 
 For batch simulations from the app, run `rdd2-service` and connect **Simulation** to `http://127.0.0.1:8765`.
 

@@ -1,6 +1,8 @@
 """Exercise user-facing exporter status without requiring Rumoca."""
 
 from pathlib import Path
+import errno
+import os
 import subprocess
 import sys
 import tempfile
@@ -67,3 +69,55 @@ class CliTests(unittest.TestCase):
 
                     if quiet:
                         self.assertEqual(result.stderr, "")
+                    else:
+                        self.assertIn("RDD2 Flight Tools | CSV conversion", result.stderr)
+                        self.assertIn("Log ready", result.stderr)
+                        self.assertIn("2 rows / 1 signal", result.stderr)
+                        self.assertNotIn("\033", result.stderr)
+                        self.assertNotIn("\r", result.stderr)
+
+    @unittest.skipUnless(os.name == "posix", "Pseudo-terminal integration requires POSIX")
+    def test_terminal_progress_preserves_stdout_path(self):
+        """Exercise stderr TTY detection through the spawned worker using only a CSV conversion."""
+        import pty
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "input.csv"
+            source.write_text("time,x\n0,1\n1,2\n")
+            output = root / "bundle"
+            master, slave = pty.openpty()
+            try:
+                environment = {**os.environ, "TERM": "xterm-256color"}
+                environment.pop("NO_COLOR", None)
+                with subprocess.Popen(
+                    [sys.executable, str(SIMULATOR_PATH), "convert-csv", str(source), "--out", str(output)],
+                    stdout=subprocess.PIPE,
+                    stderr=slave,
+                    env=environment,
+                ) as process:
+                    os.close(slave)
+                    slave = None
+                    chunks = []
+                    while True:
+                        try:
+                            chunk = os.read(master, 4096)
+                        except OSError as error:
+                            if error.errno != errno.EIO:
+                                raise
+                            break
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                    stdout, _ = process.communicate(timeout=10)
+                    stderr = b"".join(chunks).decode()
+                    self.assertEqual(process.returncode, 0, stderr)
+                    self.assertEqual(stdout.decode(), f"{output}\n")
+                    self.assertIn("\r\033[2K", stderr)
+                    self.assertIn("\033[1;36m", stderr)
+                    self.assertIn("Log ready", stderr)
+                    self.assertTrue((output / "trace.arrow").is_file())
+            finally:
+                if slave is not None:
+                    os.close(slave)
+                os.close(master)

@@ -76,10 +76,10 @@ def simulate(
         RuntimeError: Simulation dependencies are missing or source inputs change during simulation.
     Notes:
         Simulation/API/file errors propagate. Unknown termination is recorded honestly. Generated samples are
-        validated while writing; packaging does not reread them. Elapsed-time heartbeats are not solver callbacks.
+        validated while writing; packaging does not reread them. The activity indicator is not a solver callback.
     """
 
-    with progress.stage("runtime_setup", "Loading the Rumoca Python compiler"):
+    with progress.stage("runtime_setup", "Load Rumoca compiler"):
         try:
             import rumoca as rum
         except ImportError as error:
@@ -97,50 +97,52 @@ def simulate(
     config_source = tomllib.loads(scenario.read_text())
     duration = stop_time if stop_time is not None else float(config_source.get("sim", {}).get("t_end", 45))
     model_name = config_source.get("model", {}).get("name", "unspecified")
-    progress.message(f"Model: {model_name}; scenario: {scenario.name}; Rumoca: {python_version}.")
-    progress.message(f"Model library: {root}")
+    progress.detail("Model", model_name)
+    progress.detail("Scenario", scenario)
+    progress.detail("Compiler", f"Rumoca {python_version}")
+    progress.detail("Library", root)
 
-    with progress.stage("source_identity_before", "Fingerprinting model inputs"):
+    with progress.stage("source_identity_before", "Fingerprint model inputs"):
         identity_before = simulation_source_identity(root, scenario)
 
-    with progress.stage("model_load", "Loading and compiling the model", heartbeat=True):
+    with progress.stage("model_load", "Compile model"):
         session, model, config = load_scenario(rum, scenario, root)
 
     solver = config_source.get("sim", {}).get("solver", "auto")
-    progress.message(f"Requested flight: 0–{duration:g} s; solver: {solver}.")
+    progress.detail("Flight", f"0–{duration:g} s / solver: {solver}")
 
-    with progress.stage("simulation", "Running Rumoca simulation (runtime setup and integration)", heartbeat=True):
+    with progress.stage("simulation", "Simulate flight"):
         result = model.simulate(t=(0.0, duration), config=config)
 
     termination = getattr(result, "termination", None) or "unknown"
     metrics = getattr(result, "metrics", None)
 
-    with progress.stage("channel_extraction", "Extracting viewer telemetry"):
+    with progress.stage("channel_extraction", "Extract viewer telemetry"):
         available = result.names
         names = [name for name in available if selected(name)]
         arrays = [result[name] for name in names]
         times = result.time
 
-    progress.message(f"Selected {len(names):,} of {len(available):,} channels; {len(times):,} simulation rows.")
+    progress.detail("Telemetry", f"{len(names):,}/{len(available):,} channels / {len(times):,} rows")
 
     # Selected arrays remain owned by Python. Release unused full-result columns before CSV formatting.
     del result
 
     if output_format == "arrow":
-        with progress.stage("arrow_validation", "Validating Arrow columns"):
+        with progress.stage("arrow_validation", "Validate Arrow columns"):
             trace = prepare_arrow(["time", *names], [times, *arrays])
     else:
-        with progress.stage("csv_write", "Writing and validating generated CSV"):
+        with progress.stage("csv_write", "Write and validate CSV"):
             trace = write_trace(output, names, times, arrays, progress)
 
-    with progress.stage("source_identity_after", "Verifying model inputs are unchanged"):
+    with progress.stage("source_identity_after", "Verify model inputs"):
         identity_after = simulation_source_identity(root, scenario)
 
         # The recorded model digest must describe the same inputs before and after the simulation.
         if identity_before["source_sha256"] != identity_after["source_sha256"]:
             raise RuntimeError("Model inputs changed during simulation; refusing misleading provenance")
 
-    with progress.stage("compiler_hash", "Fingerprinting the Rumoca native extension"):
+    with progress.stage("compiler_hash", "Fingerprint native compiler"):
         native_hash = sha256(native_extension)
 
     return {
