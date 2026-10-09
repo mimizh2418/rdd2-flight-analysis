@@ -10,5 +10,5 @@ name = "Rdd2Scenarios.FigureEightMission"
 
 [sim]
 dt = 0.01
-t_end = 35.0
+t_end = 25.0
 solver = "rk-like"

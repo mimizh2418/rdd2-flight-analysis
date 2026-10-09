@@ -56,7 +56,7 @@ The log defaults to `exports/qualification-mocap/trace.arrow`; use `--out PATH` 
 Import `trace.arrow`; its metadata is embedded, so no sidecar is needed. Add `--format csv` to produce
 `trace.csv` and `manifest.json` instead. Use `rdd2-simulate --help` for simulation settings and mission geometry.
 
-See [scenarios](scenarios/README.md) for the mocap qualification mission, Dubins circles, and Dubins figure-eight.
+See [scenarios](scenarios/README.md) for the mocap qualification mission, Dubins circles, and Bezier Lissajous figure-eight.
 
 To convert an existing CSV without running a simulation, use the secondary command:
 

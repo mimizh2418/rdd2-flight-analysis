@@ -2,14 +2,15 @@
 
 All missions extend `Vehicles.Rdd2.WaypointVehicleSystem` directly and use its plant, noisy sensors, mocap-aided
 estimator (`navigationSource = 3`, `fuseMocap = true`), and standard guidance/rate control. Qualification uses the
-upstream waypoint planner; circles and the figure-eight use mission-local Dubins references with Bezier vertical profiles.
+upstream waypoint planner; circles use Dubins arcs and the figure-eight uses a Bezier approximation of a Lissajous curve.
+Both use Bezier vertical profiles.
 GPS, optical flow, magnetometer, and barometer aiding are disabled by the upstream mocap navigation mode.
 
-| Scenario              | Route                                                                              | Duration |
-| --------------------- | ---------------------------------------------------------------------------------- | -------- |
-| `qualification-mocap` | Original qualification geometry: takeoff, 4 m box at 2 m, landing                  | 45 s     |
-| `circles-mocap`       | Takeoff to 2 m, two 3 m-radius Dubins circles at 2 m/s, landing                    | 40 s     |
-| `figure-eight-mocap`  | Takeoff to 2 m, 3 m-radius Dubins lobes at 2.5 m/s with a smooth crossing, landing | 35 s     |
+| Scenario              | Route                                                                       | Duration |
+| --------------------- | --------------------------------------------------------------------------- | -------- |
+| `qualification-mocap` | Original qualification geometry: takeoff, 4 m box at 2 m, landing           | 45 s     |
+| `circles-mocap`       | Takeoff to 2 m, two 3 m-radius Dubins circles at 2 m/s, landing             | 40 s     |
+| `figure-eight-mocap`  | Takeoff to 2 m, 12 by 6 m Lissajous figure-eight at up to 8.25 m/s, landing | 25 s     |
 
 From the repository root:
 
@@ -60,26 +61,34 @@ This Dubins mission has not been validated with a full vehicle simulation.
 
 `--stop-time 0.05` is useful for a startup smoke run; it does not validate the completed flight.
 
-## Dubins figure-eight
+## Lissajous figure-eight
 
-`FigureEightMission.mo` keeps the figure-eight geometry, timing, and controller wiring in one Modelica file.
-It takes off from the origin to 2 m, flies one left lobe centered at `{0, 3, 2}` m and one right lobe centered
-at `{0, -3, 2}` m, then returns to the origin for landing. Yaw follows the direction of travel.
+`FigureEightMission.mo` keeps the geometry, timing, and controller wiring in one file. It takes off from the
+origin to 2 m, flies a Bezier approximation of `x = 6 sin(theta)`, `y = 3 sin(2 theta)` for one loop, then lands
+at the origin. Eight degree-nine segments match position and phase derivatives through snap at their
+joins. The default approximation differs from the ideal 12 by 6 m curve by less than one micrometre.
+The existing Bezier evaluator supplies spatial derivatives through fourth order; a Bezier phase ramp and
+the chain rule convert them to physical-time velocity, acceleration, jerk, and snap. Yaw follows the
+approximated curve's tangent. Display waypoints sample the ideal curve.
 
-The lobes are explicit `Planning.Dubins.Path` arcs evaluated with `Planning.Dubins.advance`. A septic Bezier
-bridge replaces the last 0.5 rad of the left circle and the first 0.5 rad of the right circle. It matches
-position, velocity, acceleration, and jerk at both joins, smoothing the curvature reversal while maintaining
-forward flight through the origin. Crossing speed stays at least 2.5 m/s and briefly reaches about 2.62 m/s;
-there is no crossing slowdown or hover. The displayed waypoint rows sample the nominal Dubins circles.
+Two-second entry and exit ramps surround constant phase rate. Physical speed varies along the curve and
+reaches **8.25 m/s at the interior crossing**, with no crossing slowdown. Average horizontal speed, including
+the ramps, is approximately 4.32 m/s. Yaw turns smoothly to the initial 45-degree tangent during takeoff,
+follows travel through both lobes without angle jumps, and holds that heading for landing.
 
-Two-second entry and exit ramps surround 2.5 m/s cruise. Vertical durations remain 3 s for takeoff, 3 s for
-descent to 0.3 m, and 1 s to the 0.1 m touchdown reference. The route takes approximately 24.06 s, with
-scheduled disarm at 28.06 s. The round 35 s end time leaves approximately 6.94 s after disarm.
+The peak speed is about 8% below an estimated 8.93 m/s actuator boundary. At the default speed, nominal
+reference thrust peaks near 31.07 N (31.62 N with a drag allowance) against 41.37 N collective capacity.
+Yaw moment including rate damping peaks near 0.244 Nm against the 0.30 Nm cap; the most loaded rotor reaches
+about 90% of its maximum thrust. These estimates include rigid-body coupling and nominal motor allocation;
+they do not establish tracking with motor lag, estimation errors, or disturbances.
 
-`radius_m`, `cruiseAltitude_m`, `cruiseSpeed_m_s`, `speedRampDuration_s`, `crossingBlendAngle_rad`, and the
-vertical durations configure the mission. Changing speed also scales the crossing duration. Retain at least
-5 s after scheduled disarm when changing either the TOML or Modelica end time.
+Vertical durations remain 3 s for takeoff, 3 s for descent to 0.3 m, and 1 s to the 0.1 m touchdown reference.
+The route takes approximately 15.46 s, with scheduled disarm at 19.46 s. The round 25 s end time leaves
+approximately 5.54 s after disarm, including margin for the 20 ms mission clock.
 
-Focused reference tests check geometry, tangent yaw, derivative continuity, crossing speed, and reference
-thrust/yaw-moment estimates against the RDD2 limits. A short startup check covers runtime initialization;
-these checks do not establish closed-loop flight performance.
+`longitudinalAmplitude_m`, `lateralAmplitude_m`, `cruiseAltitude_m`, `cruiseSpeed_m_s` (peak crossing speed),
+`speedRampDuration_s`, and the vertical durations configure the mission. Recheck feasibility after changing
+geometry or speed. Retain at least 5 s after scheduled disarm in both TOML and Modelica end times.
+
+Focused reference tests check shape, tangent yaw, derivative continuity, crossing speed, and full reference
+body moments and individual rotor demands. They do not run a full vehicle flight.
