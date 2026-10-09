@@ -4,65 +4,94 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import tempfile
 import time
 
 from .arrow_io import arrow_modules, csv_to_arrow, write_arrow
 from .csv_io import copy_and_hash, scan_csv
 from .metadata import SCHEMA, signal_catalog
-from .paths import PROJECT_SCENARIOS, resolve_scenario
+from .output import ExportTransaction
+from .paths import resolve_scenario
 from .progress import Progress
 from .provenance import sha256
 from .simulation import simulate
 from .trace import TraceSummary
 
 
+def output_directory(args) -> Path:
+    """Resolve --out or exports/<scenario-name> without creating any directories.
+
+    Args:
+        args: Parsed simulation or CSV-conversion arguments.
+    Returns:
+        Absolute output directory; default names omit the rumoca-scenario prefix and its separator.
+    """
+    out = args.out
+    if out is None:
+        name = args.scenario.stem.removeprefix("rumoca-scenario").lstrip(".-_") or "scenario"
+        out = Path("exports") / name
+    return out.resolve()
+
+
+def validate_inputs(args) -> None:
+    """Reject conflicting options, missing model roots, and missing inputs before filesystem changes.
+
+    Args:
+        args: Parsed simulation or CSV-conversion arguments.
+    Raises:
+        ValueError: Options conflict or the selected model root/scenario is missing.
+        FileNotFoundError: A CSV, receipt, or mission-metadata file is missing.
+    """
+    if args.csv and args.stop_time is not None:
+        raise ValueError("--stop-time only applies when running a scenario")
+    if args.receipt and not args.csv:
+        raise ValueError("--receipt only applies when repackaging an existing CSV")
+
+    if not args.csv:
+        root = args.modelica_root.expanduser().resolve()
+        if not root.is_dir():
+            raise ValueError(f"Modelica root must be an existing directory: {root}")
+        scenario = resolve_scenario(args.scenario, root)
+        if not scenario.is_file():
+            raise ValueError(f"Scenario must be an existing file: {scenario}")
+
+    for path in (args.csv, args.receipt, args.mission_json):
+        if path is not None and not path.is_file():
+            raise FileNotFoundError(f"Input must be an existing file: {path}")
+
+
 def export_bundle(args) -> Path:
-    """Create a trace/manifest bundle, verify supplied provenance, and refuse to overwrite results.
+    """Create a validated trace/manifest bundle and replace existing generated artifacts.
 
     Args:
         args: Namespace from parser(), with exactly one of csv/scenario and an optional simulation output directory.
     Returns:
         Resolved output directory containing trace.arrow, or trace.csv and manifest.json.
     Raises:
-        ValueError: Options conflict, output is nonempty, scenario is outside the checkout, receipt hash differs, or
+        ValueError: Options conflict, an artifact path is a directory, scenario is missing, receipt hash differs, or
         the source CSV is invalid.
     Notes:
         Stages on the output filesystem so publication uses renames instead of another full CSV copy. Generated
         CSV metadata is collected during writing. Imported CSVs are copied/hashed once, then validated as a stable
-        snapshot. Existing results are never overwritten; failures discard the staging files.
+        snapshot. Failures remove staging and newly created empty directories and restore previous artifacts if
+        publication started. Successful publication replaces generated artifacts and removes stale format files,
+        preserving unrelated files. The CLI supervises native work separately to also clean up after native crashes.
         Without --out, simulations use exports/<scenario-stem> relative to the working directory, removing the
         rumoca-scenario prefix and its separator. A bare rumoca-scenario.toml uses exports/scenario.
     """
 
-    if args.csv and args.stop_time is not None:
-        raise ValueError("--stop-time only applies when running a scenario")
-
-    if args.receipt and not args.csv:
-        raise ValueError("--receipt only applies when repackaging an existing CSV")
+    validate_inputs(args)
 
     output_format = args.format
     if output_format == "arrow":
         arrow_modules()  # Fail before starting an expensive simulation when dependencies are missing.
     progress = Progress(quiet=getattr(args, "quiet", False))
-    out = args.out
-
-    if out is None:
-        # Use the scenario filename, not its parent library/package or the viewer's optional display name.
-        name = args.scenario.stem.removeprefix("rumoca-scenario").lstrip(".-_") or "scenario"
-        out = Path("exports") / name
-
-    out = out.resolve()
-    progress.message(f"Output directory: {out}")
-
-    if out.exists() and any(out.iterdir()):
-        raise ValueError("Output directory must be empty (existing artifacts will not be overwritten)")
-
-    out.mkdir(parents=True, exist_ok=True)
+    out = output_directory(args)
+    progress.message(f"Output directory: {getattr(args, 'display_out', out)}")
 
     # A sibling staging directory shares the output filesystem, including when /tmp is on another mount.
-    with tempfile.TemporaryDirectory(prefix=f".{out.name}-export-", dir=out.parent) as temporary:
-        csv_path = Path(temporary) / "trace.csv"
+    with ExportTransaction(out) as transaction:
+        temporary = transaction.staging
+        csv_path = temporary / "trace.csv"
         provenance: dict = {}
         scenario: Path | None = None
 
@@ -101,8 +130,8 @@ def export_bundle(args) -> Path:
 
             scenario = resolve_scenario(args.scenario, root)
 
-            if not scenario.is_relative_to(root) and not scenario.is_relative_to(PROJECT_SCENARIOS):
-                raise ValueError("Scenario must be inside the supplied modelica_models checkout or project scenarios/")
+            if not scenario.is_file():
+                raise ValueError(f"Scenario must be an existing file: {scenario}")
 
             provenance, trace = simulate(scenario, root, csv_path, args.stop_time, progress, output_format)
 
@@ -145,20 +174,14 @@ def export_bundle(args) -> Path:
             if output_format == "csv":
                 staged_manifest.write_text(json.dumps(manifest, indent=2, default=str) + "\n", encoding="utf-8")
 
-            # Check again after a potentially long simulation, before publishing either completed file.
-            if any(out.iterdir()):
-                raise ValueError("Output directory must be empty (existing artifacts will not be overwritten)")
+            transaction.publish([artifact, staged_manifest] if output_format == "csv" else [artifact])
 
-            artifact.rename(out / artifact.name)
-            if output_format == "csv":
-                staged_manifest.rename(out / "manifest.json")
-
-    observed = trace.observed
-    size = (out / artifact.name).stat().st_size / 1024**2
-    elapsed = time.perf_counter() - progress.started
-    progress.message(
-        f"Log ready: {observed['rows']:,} rows, {len(trace.names) - 1:,} signals, "
-        f"{observed['start_time_s']:g}–{observed['end_time_s']:g} s, {size:.1f} MiB. Total: {elapsed:.2f} s."
-    )
+        observed = trace.observed
+        size = (out / artifact.name).stat().st_size / 1024**2
+        elapsed = time.perf_counter() - progress.started
+        progress.message(
+            f"Log ready: {observed['rows']:,} rows, {len(trace.names) - 1:,} signals, "
+            f"{observed['start_time_s']:g}–{observed['end_time_s']:g} s, {size:.1f} MiB. Total: {elapsed:.2f} s."
+        )
 
     return out

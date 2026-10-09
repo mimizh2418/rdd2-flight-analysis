@@ -7,8 +7,8 @@ import math
 from pathlib import Path
 import sys
 
-from .bundle import export_bundle
 from .paths import default_modelica_root
+from .worker import ExportCancelled, supervise_export
 
 
 def parser():
@@ -33,7 +33,7 @@ def parser():
         "scenario",
         type=Path,
         metavar="SCENARIO",
-        help="Rumoca scenario TOML in scenarios/ or relative to the model library",
+        help="Rumoca scenario TOML anywhere; absolute, working-directory-relative, or library-relative path",
     )
     run.add_argument(
         "--modelica-root",
@@ -42,7 +42,9 @@ def parser():
         help="Model sources (default: RDD2_MODELICA_ROOT or ../modelica_models)",
     )
     run.add_argument("--stop-time", type=float, help="Override the scenario's final simulation time in seconds")
-    run.add_argument("--out", type=Path, help="Output directory (default: exports/<scenario-name>)")
+    run.add_argument(
+        "--out", type=Path, help="Output directory; replaces existing artifacts (default: exports/<scenario-name>)"
+    )
 
     conversion = commands.add_parser(
         "convert-csv",
@@ -51,7 +53,9 @@ def parser():
     )
     conversion.add_argument("csv", type=Path, metavar="CSV", help="Existing numeric CSV log")
     conversion.add_argument("--receipt", type=Path, help="Existing CSV provenance receipt to verify and preserve")
-    conversion.add_argument("--out", type=Path, required=True, help="Output directory for the converted log")
+    conversion.add_argument(
+        "--out", type=Path, required=True, help="Output directory for the converted log; replaces existing artifacts"
+    )
 
     for command in (run, conversion):
         command.add_argument(
@@ -77,15 +81,18 @@ def main(argv: list[str] | None = None) -> int:
     Args:
         argv: Optional arguments without the executable name; None reads process arguments.
     Returns:
-        Zero for a completed export, or one after reporting an export error.
+        Zero for a completed export, one for an export error, or 130 for cancellation.
     """
     arguments = parser().parse_args(argv)
 
     try:
         if arguments.stop_time is not None and (not math.isfinite(arguments.stop_time) or arguments.stop_time <= 0):
             raise ValueError("--stop-time must be finite and positive")
-        print(export_bundle(arguments))
+        supervise_export(arguments)
         return 0
+    except (KeyboardInterrupt, ExportCancelled):
+        print("Export cancelled", file=sys.stderr)
+        return 130
     except Exception as error:
         operation = "Simulation" if arguments.command == "run" else "CSV conversion"
         print(f"{operation} failed: {error}", file=sys.stderr)

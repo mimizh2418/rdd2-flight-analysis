@@ -1,5 +1,5 @@
 within;
 
 package Rdd2Scenarios
-  "RDD2 flight missions using the upstream waypoint planner and mocap navigation"
+  "RDD2 waypoint and Dubins flight missions using mocap navigation"
 end Rdd2Scenarios;

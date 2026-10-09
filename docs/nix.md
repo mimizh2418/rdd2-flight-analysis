@@ -10,7 +10,7 @@ rdd2-dev
 
 The environment pins Node.js 22/npm, Python 3.11, uv, Git, a Nix formatter, certificates, and native runtime libraries
 through `flake.lock`. Modelica sources are pinned independently to
-`dfdb3294f61ab639a8a8be19611a1f69187a3ff7`. They are fetched automatically into the read-only Nix store.
+`a1c3c30e1390f394d57e66546ffe2fa9a4eb184b`. They are fetched automatically into the read-only Nix store.
 This repository's [scenarios](../scenarios/README.md) run directly from the working tree against those pinned sources.
 
 ## Shortcuts
@@ -97,6 +97,6 @@ For simulations, supply the model sources separately:
 
 ```sh
 git clone https://github.com/CogniPilot/modelica_models ../modelica_models
-git -C ../modelica_models checkout dfdb3294f61ab639a8a8be19611a1f69187a3ff7
+git -C ../modelica_models checkout a1c3c30e1390f394d57e66546ffe2fa9a4eb184b
 npm run simulate -- scenarios/rumoca-scenario.qualification-mocap.toml --modelica-root ../modelica_models
 ```

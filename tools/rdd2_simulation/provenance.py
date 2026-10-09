@@ -6,6 +6,9 @@ import hashlib
 import os
 from pathlib import Path
 import subprocess
+import tomllib
+
+from .paths import model_source_root
 
 
 def sha256(path: Path) -> str:
@@ -28,11 +31,12 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def source_identity(root: Path) -> dict:
+def source_identity(root: Path, *, files: list[Path] | None = None) -> dict:
     """Hash model inputs and record the checkout revision and working-tree status.
 
     Args:
         root: Modelica checkout whose model/config/resource inputs are inspected.
+        files: Optional exact inputs within root; None discovers model/config/resource files recursively.
     Returns:
         Source SHA-256, optional Git/Nix revision, and optional dirty-tree status.
     Notes:
@@ -41,20 +45,21 @@ def source_identity(root: Path) -> dict:
     """
 
     digest = hashlib.sha256()
-    paths = []
+    paths = [] if files is None else files
     excluded = {".git", "artifacts", "node_modules"}
 
     # Prune ignored directory trees before traversal, rather than visiting every generated artifact first.
-    for directory, children, filenames in os.walk(root):
-        children[:] = [name for name in children if name not in excluded]
+    if files is None:
+        for directory, children, filenames in os.walk(root):
+            children[:] = [name for name in children if name not in excluded]
 
-        for filename in filenames:
-            path = Path(directory) / filename
-            relative = path.relative_to(root)
+            for filename in filenames:
+                path = Path(directory) / filename
+                relative = path.relative_to(root)
 
-            if filename not in excluded and path.is_file():
-                if path.suffix in (".mo", ".toml") or filename == "package.order" or "Resources" in relative.parts:
-                    paths.append(path)
+                if filename not in excluded and path.is_file():
+                    if path.suffix in (".mo", ".toml") or filename == "package.order" or "Resources" in relative.parts:
+                        paths.append(path)
 
     for path in sorted(paths):
         # Include relative names as well as file hashes so renamed inputs change the source identity.
@@ -83,28 +88,40 @@ def source_identity(root: Path) -> dict:
 
 
 def simulation_source_identity(root: Path, scenario: Path) -> dict:
-    """Fingerprint the selected library and any project scenario sources outside it.
+    """Fingerprint the selected library, external scenarios, and external model packages.
 
     Args:
         root: Resolved Modelica library directory.
         scenario: Resolved scenario actually compiled.
     Returns:
-        Library identity with a combined source digest and separate scenario_sources identity when needed.
+        Library identity with a combined source digest and separate scenario_sources/model_sources when needed.
     Notes:
-        Project scenarios used with a developer checkout live in a separate repository. Include their models,
-        TOML, and package files so before/after checks detect edits to either set of simulation inputs.
+        External TOML files may reference a model in another directory. Include both source trees so before/after
+        checks detect changes even when the scenario, model, and selected library are stored separately.
     """
     identity = source_identity(root)
-    if scenario.is_relative_to(root):
-        return identity
+    external = {}
+    if not scenario.is_relative_to(root):
+        external["scenario_sources"] = scenario.parent
 
-    scenario_identity = source_identity(scenario.parent)
-    combined = hashlib.sha256()
-    combined.update(bytes.fromhex(identity["source_sha256"]))
-    combined.update(bytes.fromhex(scenario_identity["source_sha256"]))
+    config = tomllib.loads(scenario.read_text())
+    filename = config.get("model", {}).get("file")
+    if filename is not None:
+        model = (scenario.parent / Path(filename).expanduser()).resolve()
+        source = model_source_root(model)
+        if not model.is_relative_to(root):
+            external["model_sources"] = source
 
-    return {
-        **identity,
-        "source_sha256": combined.hexdigest(),
-        "scenario_sources": {"path": str(scenario.parent), **scenario_identity},
-    }
+    if external:
+        combined = hashlib.sha256(bytes.fromhex(identity["source_sha256"]))
+        for name, source in external.items():
+            # The TOML can live in Downloads or a home directory. Hash just that file; the external model package
+            # has its own recursive fingerprint, so unrelated sibling files do not affect provenance or scan time.
+            source_info = (
+                source_identity(source, files=[scenario]) if name == "scenario_sources" else source_identity(source)
+            )
+            combined.update(bytes.fromhex(source_info["source_sha256"]))
+            identity[name] = {"path": str(source), **source_info}
+        identity["source_sha256"] = combined.hexdigest()
+
+    return identity

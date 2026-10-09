@@ -26,7 +26,7 @@ rdd2-dev
 ```
 
 Nix supplies pinned Node.js/npm, Python, uv, development tools, and `modelica_models` at
-`dfdb3294f61ab639a8a8be19611a1f69187a3ff7`. uv manages Python dependencies in `.venv-nix`;
+`a1c3c30e1390f394d57e66546ffe2fa9a4eb184b`. uv manages Python dependencies in `.venv-nix`;
 a separate model checkout is unnecessary. The 3D views require WebGL.
 
 All `rdd2-*` commands below assume this shell and the repository root.
@@ -56,7 +56,7 @@ The log defaults to `exports/qualification-mocap/trace.arrow`; use `--out PATH` 
 Import `trace.arrow`; its metadata is embedded, so no sidecar is needed. Add `--format csv` to produce
 `trace.csv` and `manifest.json` instead. Use `rdd2-simulate --help` for simulation settings and mission geometry.
 
-See [scenarios](scenarios/README.md) for the mocap qualification mission and five-circle waypoint flight.
+See [scenarios](scenarios/README.md) for the mocap qualification mission and two-circle waypoint flight.
 
 To convert an existing CSV without running a simulation, use the secondary command:
 

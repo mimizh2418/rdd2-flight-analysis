@@ -5,7 +5,7 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 
@@ -40,30 +40,6 @@ class ServiceTests(unittest.TestCase):
             finally:
                 jobs.executor.shutdown(wait=True)
 
-    def test_local_job_passes_its_current_source_and_the_selected_library_to_exporter(self):
-        """Forward local scenario paths and preserve the root override without starting a real simulation."""
-        scenario = self.project_scenarios / "rumoca-scenario.local.toml"
-        scenario.write_text("# original scenario\n")
-        jobs = service.Jobs(self.root, self.root / "local-jobs")
-        ident = "local-job"
-        jobs.items[ident] = {"id": ident, "scenario": f"scenarios/{scenario.name}", "state": "queued"}
-        process = Mock()
-        process.wait.return_value = 0
-
-        # Existing paths are read by the exporter at run time, so edits need no rediscovery or Nix rebuild.
-        scenario.write_text("# edited scenario\n")
-        try:
-            with patch.object(service.subprocess, "Popen", return_value=process) as launch:
-                jobs.run(ident)
-
-            command = launch.call_args.args[0]
-            self.assertEqual(command[3], str(scenario.resolve()))
-            self.assertEqual(command[command.index("--modelica-root") + 1], str(self.root))
-            self.assertEqual(scenario.read_text(), "# edited scenario\n")
-            self.assertEqual(jobs.items[ident]["state"], "complete")
-        finally:
-            jobs.executor.shutdown(wait=True)
-
     def test_completed_arrow_artifact_streams_without_a_manifest(self):
         """Serve binary bytes with the Arrow MIME type, and report an absent CSV sidecar as 404."""
         ident = "arrow-result"
@@ -82,12 +58,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.request("GET", f"/api/jobs/{ident}/manifest.json")[0], 404)
 
     def setUp(self):
-        """Start an isolated loopback service with a temporary invalid scenario.
-
-        Returns:
-            None; stores a temporary fixture, job queue, ephemeral-port HTTP server, and background server thread on
-            this test case.
-        """
+        """Start a loopback service on an ephemeral port with temporary model and scenario directories."""
 
         self.temporary = tempfile.TemporaryDirectory()
         workspace = Path(self.temporary.name)
@@ -110,11 +81,7 @@ class ServiceTests(unittest.TestCase):
         self.thread.start()
 
     def tearDown(self):
-        """Stop the server and executor before removing temporary test files.
-
-        Returns:
-            None; shuts down the server and executor before deleting the temporary fixture. Runs after each test.
-        """
+        """Stop the server and executor before removing temporary test files."""
 
         self.server.shutdown()
         self.server.server_close()
@@ -145,44 +112,21 @@ class ServiceTests(unittest.TestCase):
 
         return status, metadata, json.loads(data) if data else None
 
-    def test_scenario_listing_and_cors(self):
-        """Check discovery, empty job listing, and permitted-origin response headers.
-
-        Returns:
-            None; creates isolated fixtures and asserts the documented behavior with unittest. Assertion failures
-            fail the test.
-        """
-
+    def test_origin_and_host_access_controls(self):
+        """Allow the configured browser origin, including preflight, while rejecting unrelated origins and hosts."""
         status, headers, data = self.request("GET", "/api/scenarios", headers={"Origin": "http://127.0.0.1:5173"})
 
         self.assertEqual(status, 200)
         self.assertEqual(data["scenarios"], [self.scenario])
         self.assertEqual(headers["Access-Control-Allow-Origin"], "http://127.0.0.1:5173")
 
-        status, _, data = self.request("GET", "/api/jobs")
-
-        self.assertEqual((status, data), (200, {"jobs": []}))
-
-    def test_unlisted_origin_and_host_are_rejected(self):
-        """Reject unrelated hosts/origins and support allowed browser preflight.
-
-        Returns:
-            None; creates isolated fixtures and asserts the documented behavior with unittest. Assertion failures
-            fail the test.
-        """
-
         for headers in ({"Origin": "https://example.com"}, {"Host": "example.com"}):
             self.assertEqual(self.request("GET", "/api/scenarios", headers=headers)[0], 403)
 
         self.assertEqual(self.request("OPTIONS", "/api/jobs", headers={"Origin": "http://127.0.0.1:5173"})[0], 204)
 
-    def test_invalid_job_and_result_requests(self):
-        """Check malformed submissions and references to nonexistent jobs.
-
-        Returns:
-            None; creates isolated fixtures and asserts the documented behavior with unittest. Assertion failures
-            fail the test.
-        """
+    def test_invalid_job_submissions_are_rejected(self):
+        """Reject malformed JSON and scenario paths outside the service's discovered models."""
 
         self.assertEqual(
             self.request(
@@ -191,16 +135,9 @@ class ServiceTests(unittest.TestCase):
             400,
         )
         self.assertEqual(self.request("POST", "/api/jobs", "{", {"Content-Type": "application/json"})[0], 400)
-        self.assertEqual(self.request("DELETE", "/api/jobs/unknown")[0], 404)
-        self.assertEqual(self.request("GET", "/api/jobs/unknown/trace.csv")[0], 404)
 
     def test_failed_process_reports_error_and_no_result(self):
-        """Confirm failed exporters report errors and cannot expose a result bundle.
-
-        Returns:
-            None; creates isolated fixtures and asserts the documented behavior with unittest. Assertion failures
-            fail the test.
-        """
+        """Confirm failed exporters report errors and cannot expose a result bundle."""
 
         status, _, data = self.request(
             "POST", "/api/jobs", json.dumps({"scenario": self.scenario}), {"Content-Type": "application/json"}

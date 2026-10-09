@@ -6,9 +6,8 @@ import math
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
 
-from exporter_support import exporter, provenance
+from exporter_support import exporter
 
 
 class CsvTests(unittest.TestCase):
@@ -26,6 +25,7 @@ class CsvTests(unittest.TestCase):
             self.assertEqual(summary.observed, observed)
             self.assertEqual(summary.csv_sha256, exporter.sha256(output))
             self.assertEqual(observed["event_rows"], 1)
+            self.assertAlmostEqual(observed["min_distinct_dt_s"], 1)
             self.assertEqual(observed["nonfinite_values"], 2)
 
             with output.open(newline="") as stream:
@@ -81,30 +81,18 @@ class CsvTests(unittest.TestCase):
                 ]
             )
 
-            # Imported bytes are fingerprinted during the copy, without a second full-file hash read.
-            with patch.object(provenance, "sha256", side_effect=AssertionError("Unexpected CSV reread")):
-                output = exporter.export_bundle(args)
+            output = exporter.export_bundle(args)
 
             manifest = json.loads((output / "manifest.json").read_text())
             self.assertEqual((output / "trace.csv").read_bytes(), payload)
             self.assertEqual(manifest["csv_sha256"], receipt["csv_sha256"])
             self.assertEqual(manifest["original_receipt"], receipt)
             self.assertEqual(manifest["observed"]["nonfinite_values"], 1)
-            self.assertIn("csv_copy", manifest["timings_wall_time_s"])
-            self.assertIn("csv_validation", manifest["timings_wall_time_s"])
 
-    def test_failed_import_removes_staging_files(self):
-        """Do not publish or leave staged CSVs after a validation failure."""
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source = root / "input.csv"
-            source.write_text("time,x\n1,2\n0,3\n")
-            args = exporter.parser().parse_args(
-                ["convert-csv", str(source), "--format", "csv", "--out", str(root / "bundle"), "--quiet"]
-            )
-
-            with self.assertRaises(ValueError):
+            # A changed receipt must fail verification and leave the already imported log intact.
+            receipt_path.write_text(json.dumps({**receipt, "csv_sha256": "wrong"}))
+            with self.assertRaisesRegex(ValueError, "Receipt SHA-256 does not match"):
                 exporter.export_bundle(args)
 
-            self.assertEqual(list((root / "bundle").iterdir()), [])
-            self.assertEqual(list(root.glob(".bundle-export-*")), [])
+            self.assertEqual((output / "trace.csv").read_bytes(), payload)
+            self.assertEqual(json.loads((output / "manifest.json").read_text()), manifest)

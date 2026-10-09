@@ -20,13 +20,30 @@ def resolve_scenario(scenario: Path, root: Path) -> Path:
     """Resolve a scenario from the working directory or relative to the selected model library.
 
     Args:
-        scenario: Absolute path, project scenarios/ path, or library-relative scenario path.
+        scenario: Absolute, home-relative, working-directory-relative, or library-relative scenario path.
         root: Resolved model source directory.
     Returns:
-        Resolved absolute path. Existing working-tree paths are used directly, including project scenarios.
-        Otherwise, paths are resolved relative to the model library. The caller validates source containment.
+        Resolved absolute path. Existing paths are used directly, including files outside either repository.
+        Otherwise, relative paths are resolved against the model library. The caller checks that the file exists.
     """
+    scenario = scenario.expanduser()
     if scenario.is_absolute() or scenario.exists():
         return scenario.resolve()
 
     return (root / scenario).resolve()
+
+
+def model_source_root(model: Path) -> Path:
+    """Find the outermost package directory needed to load an external Modelica file.
+
+    Args:
+        model: Resolved model file whose enclosing package directories contain package.mo files.
+    Returns:
+        The outermost enclosing package directory, or the model's directory for a standalone model.
+    Notes:
+        A nested package directory cannot be registered as a top-level root without changing its namespace.
+    """
+    source = model.parent
+    while source.parent != source and (source.parent / "package.mo").is_file():
+        source = source.parent
+    return source

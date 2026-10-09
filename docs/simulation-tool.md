@@ -14,13 +14,16 @@ rdd2-simulate scenarios/rumoca-scenario.qualification-mocap.toml
 Output defaults to `exports/<scenario-name>/`, relative to the working directory, stripping `rumoca-scenario` and
 its separator from the filename stem. A bare `rumoca-scenario.toml` uses `exports/scenario/`.
 Import `exports/qualification-mocap/trace.arrow` into the viewer. Simulation writes directly to Arrow without an
-intermediate CSV. Existing artifacts are not overwritten; use `--out` with a new or empty directory for another run.
+intermediate CSV. Successful runs replace existing logs in the output directory; failed simulations keep the previous logs.
+Switching formats removes stale Arrow/CSV artifacts. Unrelated files are preserved. Use `--out` to keep runs separately.
 
 The model root comes from `RDD2_MODELICA_ROOT`, so no sibling checkout is needed.
 To use a modified checkout instead, pass `--modelica-root ../modelica_models`. This controls Rumoca's compiler roots,
 not just provenance. Project scenarios always use the local working-tree sources.
+Scenario TOML files can be anywhere: pass an absolute path, `~/...`, or a path relative to the working directory.
+Library-relative paths still work. `[model].file` resolves relative to the TOML file, or can be an absolute path.
 
-[Project scenarios](../scenarios/README.md) include the qualification box and five approximate 3 m-radius circles,
+[Project scenarios](../scenarios/README.md) include the qualification box and two approximate 3 m-radius circles,
 both using mocap and the upstream waypoint planner.
 
 | Option                 | Purpose                                                                 |
@@ -44,9 +47,16 @@ Arrow writing reports row progress. Stdout from the Python tool contains the com
 
 Metadata records source identity, solver settings, observed coverage, timing information, and Rumoca package/native
 versions plus the native extension hash. Source checks before/after the run detect input changes.
-Local project scenarios outside the model checkout are also fingerprinted, with their identity in `scenario_sources`.
-Logs ending before the requested duration are marked partial. Output is staged privately and published after completion;
-failure removes the staging output.
+External scenario sources are fingerprinted in `scenario_sources`; a separately located model package is recorded in
+`model_sources`. Both are included in the combined source digest.
+Logs ending before the requested duration are marked partial.
+
+Temporary `.scenario-export-*` directories under `exports/` hold unpublished files on the same filesystem as the
+destination, allowing fast renames instead of copying large logs. The final directory is created only for publication.
+Failures remove staging and newly created empty directories; publication errors restore previous artifacts.
+The CLI supervises native work in a child process, so cleanup also handles Rumoca crashes and cancellation.
+Force-killing the supervising process or losing power can still leave staging directories. Compiler/dependency caches
+are outside this export rollback.
 
 ## Convert existing CSV
 

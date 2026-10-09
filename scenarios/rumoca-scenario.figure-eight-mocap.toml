@@ -5,10 +5,10 @@ version = "1"
 task = "simulate"
 
 [model]
-file = "CircleMission.mo"
-name = "Rdd2Scenarios.CircleMission"
+file = "FigureEightMission.mo"
+name = "Rdd2Scenarios.FigureEightMission"
 
 [sim]
 dt = 0.01
-t_end = 40.0
+t_end = 35.0
 solver = "rk-like"

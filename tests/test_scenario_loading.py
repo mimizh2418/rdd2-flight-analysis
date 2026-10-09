@@ -1,18 +1,61 @@
 """Check compiler root overrides and external scenario provenance without running a solver."""
 
 import importlib.util
+from contextlib import chdir
 from pathlib import Path
-from subprocess import CompletedProcess
 import tempfile
-import tomllib
-from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
 
 from exporter_support import provenance, simulation
+from rdd2_simulation.paths import resolve_scenario
 
 
 class ScenarioLoadingTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec("rumoca"), "Needs the simulation extra")
+    def test_external_toml_loads_a_model_from_a_separate_nested_package(self):
+        """Compile a Modelica package independently of where its scenario TOML is stored."""
+        import rumoca
+
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            library = workspace / "library"
+            configs = workspace / "configs"
+            package = workspace / "custom" / "FlightPackage"
+            nested = package / "Missions"
+            library.mkdir()
+            configs.mkdir()
+            nested.mkdir(parents=True)
+            (package / "package.mo").write_text("within; package FlightPackage end FlightPackage;")
+            (nested / "package.mo").write_text("within FlightPackage; package Missions end Missions;")
+            model_file = nested / "Flight.mo"
+            model_file.write_text("within FlightPackage.Missions; model Flight parameter Real marker = 9; end Flight;")
+            scenario = configs / "flight.toml"
+            scenario.write_text(
+                '[rumoca]\nversion = "1"\ntask = "simulate"\n'
+                '[model]\nfile = "../custom/FlightPackage/Missions/Flight.mo"\nname = "FlightPackage.Missions.Flight"\n'
+                '[sim]\ndt = 0.02\nsolver = "rk-like"\n'
+            )
+
+            with chdir(workspace):
+                resolved = resolve_scenario(Path("configs/flight.toml"), library)
+                session, model, config = simulation.load_scenario(rumoca, resolved, library)
+            self.assertEqual(session.roots, [str(library), str(package)])
+            self.assertEqual(model.parameters["marker"].value, 9)
+            self.assertEqual(config.dt, 0.02)
+
+            before = provenance.simulation_source_identity(library, scenario)
+            (configs / "unrelated.toml").write_text("# not a simulation input\n")
+            self.assertEqual(before, provenance.simulation_source_identity(library, scenario))
+            model_file.write_text(model_file.read_text().replace("marker = 9", "marker = 10"))
+            after = provenance.simulation_source_identity(library, scenario)
+            self.assertNotEqual(before["source_sha256"], after["source_sha256"])
+            self.assertEqual(before["model_sources"]["path"], str(package))
+
+            (library / "Vehicle.mo").write_text("within; model Vehicle end Vehicle;")
+            self.assertNotEqual(
+                after["source_sha256"], provenance.simulation_source_identity(library, scenario)["source_sha256"]
+            )
+
     @unittest.skipUnless(importlib.util.find_spec("rumoca"), "Needs the simulation extra")
     def test_nested_library_scenario_preserves_its_package_namespace(self):
         """Compile a nested mission without treating its package directory as a second top-level root."""
@@ -36,7 +79,8 @@ class ScenarioLoadingTests(unittest.TestCase):
                 '[sim]\ndt = 0.005\nsolver = "rk-like"\n'
             )
 
-            session, model, config = simulation.load_scenario(rumoca, scenario, root)
+            resolved = resolve_scenario(scenario.relative_to(root), root)
+            session, model, config = simulation.load_scenario(rumoca, resolved, root)
             self.assertEqual(session.roots, [str(root)])
             self.assertEqual(model.name, "ProbeLibrary.Missions.Flight")
             self.assertEqual(model.parameters["marker"].value, 7)
@@ -70,68 +114,9 @@ class ScenarioLoadingTests(unittest.TestCase):
                 '[sim]\ndt = 0.01\nsolver = "rk-like"\n'
             )
 
+            original = scenario.read_bytes()
             _, model, config = simulation.load_scenario(rumoca, scenario, selected)
             self.assertEqual(model.parameters["marker"].value, 2)
             self.assertEqual(config.dt, 0.01)
             self.assertEqual(config.solver, "rk-like")
-
-    def test_selected_root_reaches_the_compiler_and_preserves_settings(self):
-        """Override TOML library roots while keeping model selection and solver settings unchanged."""
-        with tempfile.TemporaryDirectory() as directory:
-            workspace = Path(directory)
-            library = workspace / "developer-models"
-            scenarios = workspace / "scenarios"
-            scenarios.mkdir()
-            scenario = scenarios / "flight.toml"
-            scenario.write_text(
-                'source_roots = ["../stale-models"]\n'
-                '[model]\nfile = "Vehicle.mo"\nname = "Mission.Vehicle"\n'
-                '[rumoca]\ntask = "simulate"\nversion = "1"\n'
-                '[sim]\nsolver = "rk-like"\ndt = 0.01\nt_end = 45\nrtol = 1e-6\n'
-            )
-            compiled = (object(), object(), object())
-            captured = []
-
-            def compile_scenario(filename):
-                """Capture Rumoca's actual configuration while the temporary TOML exists."""
-                effective = Path(filename)
-                config = tomllib.loads(effective.read_text())
-                captured.append(effective)
-
-                self.assertEqual(config["source_roots"], [str(library), str(scenarios)])
-                self.assertEqual(config["model"], {"file": str(scenarios / "Vehicle.mo"), "name": "Mission.Vehicle"})
-                self.assertEqual(config["sim"], {"solver": "rk-like", "dt": 0.01, "t_end": 45, "rtol": 1e-6})
-                self.assertEqual(config["rumoca"], {"task": "simulate", "version": "1"})
-                return compiled
-
-            runtime = SimpleNamespace(Session=SimpleNamespace(from_scenario=Mock(side_effect=compile_scenario)))
-            original = scenario.read_bytes()
-            self.assertEqual(simulation.load_scenario(runtime, scenario, library), compiled)
-            self.assertFalse(captured[0].exists())
             self.assertEqual(scenario.read_bytes(), original)
-
-    def test_external_scenario_models_are_included_in_source_identity(self):
-        """Changing either repository's models changes the combined digest while preserving library identity."""
-        with tempfile.TemporaryDirectory() as directory:
-            workspace = Path(directory)
-            library = workspace / "models"
-            scenarios = workspace / "scenarios"
-            library.mkdir()
-            scenarios.mkdir()
-            (library / "Vehicle.mo").write_text("model Vehicle end Vehicle;")
-            mission = scenarios / "Mission.mo"
-            mission.write_text("model Mission end Mission;")
-            scenario = scenarios / "flight.toml"
-            scenario.write_text('[model]\nfile = "Mission.mo"\nname = "Mission"\n')
-
-            with patch.object(provenance.subprocess, "run", return_value=CompletedProcess([], 128, "", "")):
-                before = provenance.simulation_source_identity(library, scenario)
-                mission.write_text("model Mission parameter Real speed = 2; end Mission;")
-                after_scenario_edit = provenance.simulation_source_identity(library, scenario)
-                (library / "Vehicle.mo").write_text("model Vehicle parameter Real mass = 1; end Vehicle;")
-                after_library_edit = provenance.simulation_source_identity(library, scenario)
-
-            self.assertNotEqual(before["source_sha256"], after_scenario_edit["source_sha256"])
-            self.assertNotEqual(after_scenario_edit["source_sha256"], after_library_edit["source_sha256"])
-            self.assertEqual(before["scenario_sources"]["path"], str(scenarios))
-            self.assertEqual(before["model_revision"], after_scenario_edit["model_revision"])

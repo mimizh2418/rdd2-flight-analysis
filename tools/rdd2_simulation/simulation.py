@@ -10,13 +10,14 @@ import tomllib
 from .arrow_io import prepare_arrow
 from .csv_io import write_trace
 from .metadata import selected
+from .paths import model_source_root
 from .progress import Progress
 from .provenance import sha256, simulation_source_identity
 from .trace import TraceSummary
 
 
 def load_scenario(rum, scenario: Path, root: Path):
-    """Compile a scenario using its library hierarchy and any external project models.
+    """Compile a scenario from any directory using the selected library and any external models.
 
     Args:
         rum: Imported Rumoca public API module.
@@ -33,13 +34,16 @@ def load_scenario(rum, scenario: Path, root: Path):
 
     config = tomllib.loads(scenario.read_text())
     model = config.get("model", {})
+    model_file = None
     if "file" in model:
-        model["file"] = str((scenario.parent / model["file"]).resolve())
+        model_file = (scenario.parent / Path(model["file"]).expanduser()).resolve()
+        model["file"] = str(model_file)
+
     # Nested library packages already belong to root. Registering their directory again as a top-level source
     # root changes the expected `within` namespace (for example, Vehicles.Rdd2.Test becomes just Test).
     roots = [str(root)]
-    if not scenario.is_relative_to(root):
-        roots.append(str(scenario.parent))
+    if model_file is not None and not model_file.is_relative_to(root):
+        roots.append(str(model_source_root(model_file)))
     config["source_roots"] = roots
 
     with tempfile.TemporaryDirectory(prefix="rdd2-scenario-") as directory:
