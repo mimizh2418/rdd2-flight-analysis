@@ -3,17 +3,17 @@
     "modelica-models": {
       "flake": false,
       "locked": {
-        "lastModified": 1788023522,
-        "narHash": "sha256-o2/Nm44ODEunzDEppOekSlCe2jBc7T0BgSv+WFoB7ZA=",
-        "owner": "CogniPilot",
+        "lastModified": 1791565114,
+        "narHash": "sha256-TUFH87ugajoYUdKVdneFQndAALnylk+p4iMPE+hBdpE=",
+        "owner": "mimizh2418",
         "repo": "modelica_models",
-        "rev": "3d6204e7a907e452e08c46cd63352d6365089a38",
+        "rev": "345af4a389c150bde720f423ee2531494aa1a675",
         "type": "github"
       },
       "original": {
-        "owner": "CogniPilot",
+        "owner": "mimizh2418",
         "repo": "modelica_models",
-        "rev": "3d6204e7a907e452e08c46cd63352d6365089a38",
+        "rev": "345af4a389c150bde720f423ee2531494aa1a675",
         "type": "github"
       }
     },

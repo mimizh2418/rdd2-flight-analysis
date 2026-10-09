@@ -1,7 +1,7 @@
 # RDD2 Flight Analysis
 
 A browser application for replaying and comparing RDD2 drone simulations from
-[modelica_models](https://github.com/CogniPilot/modelica_models) and
+[modelica_models](https://github.com/mimizh2418/modelica_models) and
 [Rumoca](https://github.com/CogniPilot/rumoca). Logs are processed locally in your browser.
 
 Built with AI slop because I don't have time to do it properly.
@@ -25,8 +25,8 @@ rdd2-install
 rdd2-dev
 ```
 
-Nix supplies pinned Node.js/npm, Python, uv, development tools, and `modelica_models` at
-`a1c3c30e1390f394d57e66546ffe2fa9a4eb184b`. uv manages Python dependencies in `.venv-nix`;
+Nix supplies pinned Node.js/npm, Python, uv, development tools, and the `mimizh2418/modelica_models` fork at
+`345af4a389c150bde720f423ee2531494aa1a675`, including trajectory feedforward. uv manages Python dependencies in `.venv-nix`;
 a separate model checkout is unnecessary. The 3D views require WebGL.
 
 All `rdd2-*` commands below assume this shell and the repository root.
@@ -46,7 +46,7 @@ See the [documentation](docs/README.md) for view controls, playback/workspaces, 
 
 ## Generating logs (optional)
 
-Use a scenario from the pinned library. Rumoca 0.10.2 includes its compiler and solver; no separate Rumoca CLI is needed:
+Run a project scenario against the pinned library. Rumoca 0.10.2 includes its compiler and solver; no separate Rumoca CLI is needed:
 
 ```sh
 rdd2-simulate scenarios/rumoca-scenario.qualification-mocap.toml
@@ -56,7 +56,7 @@ The log defaults to `exports/qualification-mocap/trace.arrow`; use `--out PATH` 
 Import `trace.arrow`; its metadata is embedded, so no sidecar is needed. Add `--format csv` to produce
 `trace.csv` and `manifest.json` instead. Use `rdd2-simulate --help` for simulation settings and mission geometry.
 
-See [scenarios](scenarios/README.md) for the mocap qualification mission and two-circle waypoint flight.
+See [scenarios](scenarios/README.md) for the mocap qualification mission, Dubins circles, and Dubins figure-eight.
 
 To convert an existing CSV without running a simulation, use the secondary command:
 

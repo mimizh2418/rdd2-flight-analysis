@@ -20,9 +20,10 @@ rdd2-simulate scenarios/rumoca-scenario.circles-mocap.toml
 rdd2-simulate scenarios/rumoca-scenario.figure-eight-mocap.toml
 ```
 
-Scenarios run directly from this working tree against the pinned model library. Edits apply to the next run without
-re-entering `nix develop`. The local service discovers all missions; restart it after adding new scenario files.
-For a developer checkout, add `--modelica-root ../modelica_models`; project sources run against it without copying.
+The pinned model fork includes the trajectory rate and acceleration feedforward needed by these missions.
+No sibling checkout is required. For local library edits, use `--modelica-root ../modelica_models`.
+Scenario edits apply to the next run without re-entering `nix develop`. The local service discovers all missions;
+restart it after adding new scenario files.
 
 Logs default to `exports/<scenario-name>/trace.arrow`; override with `--out PATH`.
 Commanded position/velocity references are included for path and tracking comparisons.
@@ -81,4 +82,4 @@ vertical durations configure the mission. Changing speed also scales the crossin
 
 Focused reference tests check geometry, tangent yaw, derivative continuity, crossing speed, and reference
 thrust/yaw-moment estimates against the RDD2 limits. A short startup check covers runtime initialization;
-these checks do not establish closed-loop flight performance. No full figure-eight flight has been simulated.
+these checks do not establish closed-loop flight performance.

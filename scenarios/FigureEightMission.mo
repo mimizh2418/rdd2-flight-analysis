@@ -360,7 +360,11 @@ model FigureEightMission
     controller.reference.positionWorld_m = reference.position;
     controller.reference.velocityWorld_m_s = reference.velocity;
     controller.reference.accelerationWorld_m_s2 = reference.acceleration;
+    controller.reference.jerkWorld_m_s3 = reference.jerk;
+    controller.reference.snapWorld_m_s4 = reference.snap;
     controller.reference.yaw_rad = reference.yaw;
+    controller.reference.yawRate_rad_s = reference.yawRate;
+    controller.reference.yawAcceleration_rad_s2 = reference.yawAcceleration;
     motorCommands.motor = controller.motorCommands.motor;
     thrust_N = controller.thrust_N;
 

@@ -9,8 +9,8 @@ rdd2-dev
 ```
 
 The environment pins Node.js 22/npm, Python 3.11, uv, Git, a Nix formatter, certificates, and native runtime libraries
-through `flake.lock`. Modelica sources are pinned independently to
-`a1c3c30e1390f394d57e66546ffe2fa9a4eb184b`. They are fetched automatically into the read-only Nix store.
+through `flake.lock`. Modelica sources come from the [mimizh2418 fork](https://github.com/mimizh2418/modelica_models), pinned to
+`345af4a389c150bde720f423ee2531494aa1a675`. This includes trajectory body-rate and angular-acceleration feedforward.
 This repository's [scenarios](../scenarios/README.md) run directly from the working tree against those pinned sources.
 
 ## Shortcuts
@@ -96,7 +96,7 @@ Install the browser with `npx playwright install chromium`, build, then run `RDD
 For simulations, supply the model sources separately:
 
 ```sh
-git clone https://github.com/CogniPilot/modelica_models ../modelica_models
-git -C ../modelica_models checkout a1c3c30e1390f394d57e66546ffe2fa9a4eb184b
+git clone https://github.com/mimizh2418/modelica_models ../modelica_models
+git -C ../modelica_models checkout 345af4a389c150bde720f423ee2531494aa1a675
 npm run simulate -- scenarios/rumoca-scenario.qualification-mocap.toml --modelica-root ../modelica_models
 ```
