@@ -25,6 +25,7 @@ Library-relative paths still work. `[model].file` resolves relative to the TOML 
 
 [Project scenarios](../scenarios/README.md) include the qualification box, Dubins circles, and a Bezier Lissajous figure-eight.
 All use mocap; the circle and figure-eight missions supply acceleration, jerk, snap, and yaw derivatives to the controller.
+The tool ignores optional jerk, snap, and yaw-derivative inputs absent from the selected controller; supported inputs remain connected.
 
 Use `rdd2-simulate --help` for CLI options. Attach mission geometry with `--mission-json PATH`;
 it is not extracted automatically. See the [format guide](arrow-format.md) for the JSON fields.

@@ -4,19 +4,53 @@ from __future__ import annotations
 
 import importlib.metadata
 from pathlib import Path
+import re
+import shutil
 import tempfile
 import tomllib
 
 from .arrow_io import prepare_arrow
 from .csv_io import write_trace
 from .metadata import selected
-from .paths import model_source_root
+from .paths import PROJECT_SCENARIOS, model_source_root
 from .progress import Progress
 from .provenance import sha256, simulation_source_identity
 from .trace import TraceSummary
 
 
-def load_scenario(rum, scenario: Path, root: Path):
+OPTIONAL_CONTROLLER_FEEDFORWARD = {
+    "jerkWorld_m_s3": "jerk",
+    "snapWorld_m_s4": "snap",
+    "yawRate_rad_s": "yaw rate",
+    "yawAcceleration_rad_s2": "yaw acceleration",
+}
+OPTIONAL_CONTROLLER_EQUATION = re.compile(
+    r"^([ \t]*)controller\.reference\.("
+    + "|".join(OPTIONAL_CONTROLLER_FEEDFORWARD)
+    + r")\s*=\s*reference\.\w+\s*;[ \t]*$",
+    re.MULTILINE,
+)
+
+
+def controller_feedforward_inputs(rum, root: Path) -> frozenset[str]:
+    """Inspect the selected RDD2 controller's actual reference fields without running it."""
+    session = rum.Session(roots=[str(root)])
+    probe = session.load(str(root / "Vehicles/Rdd2/Controller.mo"), model="Vehicles.Rdd2.Controller")
+    variables = probe.to_dict("flat")["variables"]
+    return frozenset(field for field in OPTIONAL_CONTROLLER_FEEDFORWARD if f"reference.{field}" in variables)
+
+
+def omit_unsupported_feedforward(source: str, supported: frozenset[str]) -> str:
+    """Omit only project mission equations targeting unavailable optional controller inputs."""
+    return OPTIONAL_CONTROLLER_EQUATION.sub(
+        lambda match: (
+            match[0] if match[2] in supported else f"{match[1]}// Optional controller input {match[2]} is unavailable."
+        ),
+        source,
+    )
+
+
+def load_scenario(rum, scenario: Path, root: Path, *, progress: Progress | None = None):
     """Compile a scenario from any directory using the selected library and any external models.
 
     Args:
@@ -27,7 +61,8 @@ def load_scenario(rum, scenario: Path, root: Path):
         Rumoca's (session, model, config), retaining all original simulation settings.
     Notes:
         Rumoca 0.10.2 has no root override on from_scenario. A temporary TOML supplies absolute model paths and
-        the selected roots, leaving the original TOML and library untouched. Compilation completes before cleanup.
+        the selected roots, leaving the original TOML and library untouched. Project missions use a temporary
+        source copy when the selected controller lacks optional feedforward inputs. Compilation completes before cleanup.
     """
     # Keep CSV conversion and missing-runtime diagnostics usable without installed simulation dependencies.
     import tomli_w
@@ -42,11 +77,28 @@ def load_scenario(rum, scenario: Path, root: Path):
     # Nested library packages already belong to root. Registering their directory again as a top-level source
     # root changes the expected `within` namespace (for example, Vehicles.Rdd2.Test becomes just Test).
     roots = [str(root)]
+    source = None
     if model_file is not None and not model_file.is_relative_to(root):
-        roots.append(str(model_source_root(model_file)))
+        source = model_source_root(model_file)
+        roots.append(str(source))
     config["source_roots"] = roots
 
     with tempfile.TemporaryDirectory(prefix="rdd2-scenario-") as directory:
+        if source == PROJECT_SCENARIOS:
+            supported = controller_feedforward_inputs(rum, root)
+            ignored = set(OPTIONAL_CONTROLLER_FEEDFORWARD) - supported
+            if ignored:
+                adapted = Path(directory) / source.name
+                shutil.copytree(source, adapted)
+                for path in adapted.rglob("*.mo"):
+                    path.write_text(omit_unsupported_feedforward(path.read_text(), supported), encoding="utf-8")
+                model["file"] = str(adapted / model_file.relative_to(source))
+                config["source_roots"] = [str(root), str(adapted)]
+                if progress is not None:
+                    labels = ", ".join(
+                        label for field, label in OPTIONAL_CONTROLLER_FEEDFORWARD.items() if field in ignored
+                    )
+                    progress.detail("Feedforward", "Unsupported controller inputs ignored: " + labels)
         effective_scenario = Path(directory) / scenario.name
         effective_scenario.write_text(tomli_w.dumps(config), encoding="utf-8")
         return rum.Session.from_scenario(str(effective_scenario))
@@ -106,7 +158,7 @@ def simulate(
         identity_before = simulation_source_identity(root, scenario)
 
     with progress.stage("model_load", "Compile model"):
-        session, model, config = load_scenario(rum, scenario, root)
+        session, model, config = load_scenario(rum, scenario, root, progress=progress)
 
     solver = config_source.get("sim", {}).get("solver", "auto")
     progress.detail("Flight", f"0–{duration:g} s / solver: {solver}")

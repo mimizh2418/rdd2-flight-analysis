@@ -5,12 +5,96 @@ from contextlib import chdir
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from exporter_support import provenance, simulation
 from rdd2_simulation.paths import resolve_scenario
 
 
 class ScenarioLoadingTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec("rumoca"), "Needs the simulation extra")
+    def test_optional_feedforward_uses_available_inputs_and_ignores_only_missing_ones(self):
+        """Exercise old, partial, and full controller contracts with a tiny algebraic reference, not a vehicle."""
+        import rumoca
+
+        fields = {
+            "jerkWorld_m_s3": ("[3]", "jerk", "{4, 5, 6}", "[1]", 4.0),
+            "snapWorld_m_s4": ("[3]", "snap", "{7, 8, 9}", "[1]", 7.0),
+            "yawRate_rad_s": ("", "yawRate", "0.2", "", 0.2),
+            "yawAcceleration_rad_s2": ("", "yawAcceleration", "0.3", "", 0.3),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            sources = workspace / "scenarios"
+            sources.mkdir()
+            (sources / "package.mo").write_text("within; package Rdd2Scenarios end Rdd2Scenarios;")
+            mission = sources / "CircleMission.mo"
+            mission.write_text(
+                "within Rdd2Scenarios; model CircleMission\n"
+                "  record Reference\n"
+                "    Real position[3]; Real velocity[3]; Real acceleration[3]; Real yaw;\n"
+                + "".join(f"    Real {name}{dims};\n" for dims, name, *_ in fields.values())
+                + "  end Reference;\n"
+                "  Reference reference; Vehicles.Rdd2.Controller controller;\n"
+                "equation\n"
+                "  reference.position = {1, 2, 3}; reference.velocity = zeros(3);\n"
+                "  reference.acceleration = zeros(3); reference.yaw = 0.1;\n"
+                + "".join(f"  reference.{name} = {value};\n" for _, name, value, *_ in fields.values())
+                + "  controller.reference.positionWorld_m = reference.position;\n"
+                "  controller.reference.velocityWorld_m_s = reference.velocity;\n"
+                "  controller.reference.accelerationWorld_m_s2 = reference.acceleration;\n"
+                "  controller.reference.yaw_rad = reference.yaw;\n"
+                + "".join(f"  controller.reference.{field} = reference.{data[1]};\n" for field, data in fields.items())
+                + "end CircleMission;\n"
+            )
+            scenario = sources / "flight.toml"
+            scenario.write_text(
+                '[rumoca]\nversion = "1"\ntask = "simulate"\n'
+                '[model]\nfile = "CircleMission.mo"\nname = "Rdd2Scenarios.CircleMission"\n'
+                '[sim]\ndt = 0.001\nsolver = "rk-like"\n'
+            )
+            original = mission.read_bytes()
+            for index, supported in enumerate(((), ("jerkWorld_m_s3", "yawRate_rad_s"), tuple(fields))):
+                with self.subTest(supported=supported):
+                    root = workspace / f"library-{index}"
+                    package = root / "Vehicles" / "Rdd2"
+                    package.mkdir(parents=True)
+                    (package.parent / "package.mo").write_text("within; package Vehicles end Vehicles;")
+                    (package / "package.mo").write_text("within Vehicles; package Rdd2 end Rdd2;")
+                    (package / "Controller.mo").write_text(
+                        "within Vehicles.Rdd2; block Controller\n"
+                        "  connector Input\n"
+                        "    input Real positionWorld_m[3]; input Real velocityWorld_m_s[3];\n"
+                        "    input Real accelerationWorld_m_s2[3]; input Real yaw_rad;\n"
+                        + "".join(f"    input Real {field}{fields[field][0]};\n" for field in supported)
+                        + "  end Input;\n"
+                        "  Input reference; output Real command;\n"
+                        "equation\n  command = reference.positionWorld_m[1]"
+                        + "".join(f" + reference.{field}{fields[field][3]}" for field in supported)
+                        + ";\nend Controller;\n"
+                    )
+                    with patch.object(simulation, "PROJECT_SCENARIOS", sources):
+                        session, model, config = simulation.load_scenario(rumoca, scenario, root)
+                    variables = model.to_dict("flat")["variables"]
+                    for field, (_, signal, *_) in fields.items():
+                        self.assertEqual(f"controller.reference.{field}" in variables, field in supported)
+                        self.assertIn(f"reference.{signal}", variables)
+                    self.assertEqual(mission.read_bytes(), original)
+                    if len(supported) == len(fields):
+                        self.assertEqual(session.roots, [str(root), str(sources)])
+                    else:
+                        self.assertFalse(Path(session.roots[-1]).exists())
+                    # The prepared model must still work after the temporary source copy is removed.
+                    result = model.simulate(t=(0.0, 0.001), config=config)
+                    self.assertAlmostEqual(result["controller.command"][0], 1.0 + sum(fields[f][4] for f in supported))
+            # This adapter must not hide unrelated Modelica errors.
+            mission.write_text(
+                original.decode().replace("end CircleMission;", "controller.reference.missing = 0;\nend CircleMission;")
+            )
+            with patch.object(simulation, "PROJECT_SCENARIOS", sources):
+                with self.assertRaisesRegex(rumoca.CompileError, "controller.reference.missing"):
+                    simulation.load_scenario(rumoca, scenario, workspace / "library-0")
+
     @unittest.skipUnless(importlib.util.find_spec("rumoca"), "Needs the simulation extra")
     def test_external_toml_loads_a_model_from_a_separate_nested_package(self):
         """Compile a Modelica package independently of where its scenario TOML is stored."""

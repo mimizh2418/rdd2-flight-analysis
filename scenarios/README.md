@@ -21,8 +21,12 @@ rdd2-simulate scenarios/rumoca-scenario.circles-mocap.toml
 rdd2-simulate scenarios/rumoca-scenario.figure-eight-mocap.toml
 ```
 
-The pinned model fork includes the trajectory rate and acceleration feedforward needed by these missions.
+The pinned model fork includes trajectory rate and acceleration feedforward for improved tracking.
 No sibling checkout is required. For local library edits, use `--modelica-root ../modelica_models`.
+The Python tool and service keep feedforward connections supported by the selected controller and ignore
+missing jerk, snap, yaw-rate, or yaw-acceleration inputs. Position, velocity, acceleration, and yaw remain
+connected; all planned derivatives remain available in the mission reference. This compatibility step uses
+a temporary source copy. Direct Rumoca commands require the controller inputs declared by the mission files.
 Scenario edits apply to the next run without re-entering `nix develop`. The local service discovers all missions;
 restart it after adding new scenario files.
 
@@ -89,6 +93,9 @@ approximately 5.54 s after disarm, including margin for the 20 ms mission clock.
 `longitudinalAmplitude_m`, `lateralAmplitude_m`, `cruiseAltitude_m`, `cruiseSpeed_m_s` (peak crossing speed),
 `speedRampDuration_s`, and the vertical durations configure the mission. Recheck feasibility after changing
 geometry or speed. Retain at least 5 s after scheduled disarm in both TOML and Modelica end times.
+
+Controllers without the extra feedforward can run the same mission, but these reference estimates do not
+establish their tracking performance at the selected speed.
 
 Focused reference tests check shape, tangent yaw, derivative continuity, crossing speed, and full reference
 body moments and individual rotor demands. They do not run a full vehicle flight.
